@@ -10,5 +10,5 @@ pub mod uma;
 
 pub use card::{CardValue, SupportCardData};
 pub use constants::GameConstants;
-pub use event::{ActionValue, ChoiceResult, EventChoice, EventCollection, EventData, TriggerType};
+pub use event::{ActionValue, ChoiceResult, EventChoice, EventCollection, EventData, ExtraStatus, TriggerType};
 pub use uma::{FreeRaceData, UmaData};

@@ -106,6 +106,49 @@ fn axis_name(i: usize) -> String {
     Data::try_get().map_or_else(|| format!("#{i}"), |d| d.consts.train_name(i))
 }
 
+/// 结算时才确定目标的属性获得（固定值见 [`ActionValue::status_pt`]）
+///
+/// 旧实现对这类效果做平均化近似（如「随机 1 项 +10」写成五维各 +2 / +3），
+/// 这里显式表达；`value` 参与 [`EventChoice::map_status`] 的同一乘算（比赛加成等）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ExtraStatus {
+    /// 随机 `count` 项五维各 +`value`（等概率、不重复；1 ≤ count ≤ 5）
+    Random {
+        /// 抽取的属性项数
+        count: u8,
+        /// 每项增量
+        value: i32,
+    },
+    /// 上一次训练的对应五维 +`value`（无上一次训练时忽略）
+    LastTrain {
+        /// 增量
+        value: i32,
+    },
+}
+
+impl ExtraStatus {
+    /// 对增量做映射（与 `ActionValue::map_status` 同口径的乘算）
+    pub fn map_value<F>(&mut self, f: F) -> &mut Self
+    where
+        F: Fn(i32) -> i32,
+    {
+        match self {
+            Self::Random { value, .. } | Self::LastTrain { value } => *value = f(*value),
+        }
+        self
+    }
+}
+
+impl fmt::Display for ExtraStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Random { count, value } => write!(f, "随机{count}项{value:+}"),
+            Self::LastTrain { value } => write!(f, "上次训练{value:+}"),
+        }
+    }
+}
+
 /// 事件选项结果
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, IntEnum)]
@@ -135,6 +178,9 @@ pub struct EventChoice {
     /// 效果
     #[serde(default)]
     pub value: ActionValue,
+    /// 结算时才确定目标的额外属性（随机 / 上次训练）；`None` = 无
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extra_status: Option<ExtraStatus>,
     /// 添加的状态
     #[serde(default)]
     pub add_flags: Option<UmaFlags>,
@@ -150,17 +196,21 @@ impl EventChoice {
             result: result as i32,
             prob: 100,
             value: value.clone(),
+            extra_status: None,
             add_flags: None,
             remove_flags: None,
         }
     }
 
-    /// 对五维属性与 pt 做映射
+    /// 对五维属性与 pt 做映射（固定值与 [`ExtraStatus`] 增量一起）
     pub fn map_status<F>(&mut self, f: F) -> &mut Self
     where
         F: Fn(i32) -> i32,
     {
-        self.value.map_status(f);
+        self.value.map_status(&f);
+        if let Some(extra) = &mut self.extra_status {
+            extra.map_value(f);
+        }
         self
     }
 }
@@ -245,6 +295,32 @@ mod tests {
         let f: TriggerType = serde_json::from_str(r#"{"type": "Fixed", "turns": [11, 12]}"#).unwrap();
         assert_eq!(f, TriggerType::Fixed { turns: vec![11, 12] });
         assert_eq!(TriggerType::default(), TriggerType::Code);
+    }
+
+    /// 层1：随机 / 上次训练属性效果可解析且缺省为空；未知 kind 报错
+    #[test]
+    fn test_extra_status_schema() {
+        let c: EventChoice =
+            serde_json::from_str(r#"{"extra_status": {"kind": "random", "count": 1, "value": 10}}"#).unwrap();
+        assert_eq!(c.extra_status, Some(ExtraStatus::Random { count: 1, value: 10 }));
+        let c: EventChoice = serde_json::from_str(r#"{"extra_status": {"kind": "last_train", "value": 20}}"#).unwrap();
+        assert_eq!(c.extra_status, Some(ExtraStatus::LastTrain { value: 20 }));
+        let c: EventChoice = serde_json::from_str("{}").unwrap();
+        assert_eq!(c.extra_status, None);
+        assert!(
+            serde_json::from_str::<EventChoice>(r#"{"extra_status": {"kind": "nope"}}"#).is_err(),
+            "未知 kind 应报错"
+        );
+    }
+
+    /// 层1：`map_status` 同时缩放固定值与额外属性增量（比赛加成对随机项也生效）
+    #[test]
+    fn test_extra_status_map_value() {
+        let mut c = EventChoice::from_action_value(&ActionValue::default(), ChoiceResult::Success);
+        c.extra_status = Some(ExtraStatus::Random { count: 1, value: 10 });
+        c.map_status(|x| x * 3 / 2);
+        assert_eq!(c.extra_status, Some(ExtraStatus::Random { count: 1, value: 15 }));
+        assert_eq!(c.extra_status.unwrap().to_string(), "随机1项+15");
     }
 
     /// 层1：选项结果与 `ChoiceResult` 双向一致

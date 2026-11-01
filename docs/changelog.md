@@ -2,6 +2,9 @@
 
 本文件简要记录每次任务的修改内容（时间倒序，最新在前）。每条一行，不含代码细节。
 
+## 2026-11-01
+- 事件新增通用「随机 N 项属性 / 上次训练属性」额外数值效果（`ExtraStatus`，含载入校验），随机抽取走事件流、上次训练位由训练方记录；比赛面板乘算统一改 floor，URA 决赛 73/75/77 改用独立系统事件；`gamedata/events.json` 非目标赛按等级改为随机 1 项、补 URA 决赛三条事件；默认行为不等价，引擎基线重录
+
 ## 2026-10-25
 - 空剧本仓模板升格为独立 workspace：按 `umaai-onsen` 同构拆 `scenario-core` / `scenario-sim` / `scenario-ai` / `scenario-cli` / `scenario-tools`，core 内按功能区拆 `game/*` 与 `data` / `config` / `trainer` / `testing`；新增 `data/` 剧本资产与配置默认层、模板 `AGENTS.md` 与纯逻辑单测；引擎 CI 模板档改 `--workspace` 并补 `fmt` / `test`
 - 剧本仓文档体系补齐：新增仓库形态 / 开发流程 / 性能优化三份通用文档，明确机制核对闸门、MCTS 与 NN 特征接入规划、优化轨，并在接入指南补文档索引

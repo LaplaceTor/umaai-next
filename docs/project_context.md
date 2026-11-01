@@ -1,6 +1,6 @@
 # miko_next 项目上下文
 
-最后核对于 2026-10-24；描述当前代码结构现状。设计依据见 [`plan/miko_next_plan.md`](plan/miko_next_plan.md)。
+最后核对于 2026-11-01；描述当前代码结构现状。设计依据见 [`plan/miko_next_plan.md`](plan/miko_next_plan.md)。
 
 ## 项目结构
 
@@ -11,7 +11,7 @@
 - 依赖方向：`umaai-cli` → `umaai` → `umasim` → `umaai-core`；`umaai-tools` / `umaai-tests` 依赖引擎并复用 `umaai-cli` 的装配与呈现件，`umaai-tests` 另依赖 `umaai-tools`（基线判定壳用其模型与跑法）；两者 `publish = false`，不进发布产物。`umaai-update` **独立于引擎依赖链**（不依赖任何本仓引擎 crate），由宿主入口按需引用（P6c′-a）。
 - 层界判据：进 `umaai-core` 的门槛是「**跨算法复用且与游戏、与算法无关**」（「零依赖」只是必要条件）。
 - 类型在 core、trait 在 umasim 时，trait impl 写在 `umasim` 一侧。
-- **剧本通用件**：跨剧本复用的机制以**带默认实现、非破坏**的方式进 `umasim` / `umaai`；首批为温泉剧本 M1 前置的四个通用件（比赛事件构造 / 训练后默认处理 / 羁绊统一出口 / 配置覆盖层泛型解析），默认行为不变、L4 基线未位移。2026-10-24 追加两件：红点完整口径可复用件 `BaseGame::do_hint`（**默认行为不等价**，训练路径红点节奏变化、L4 基线已重录）与分桶采样 pub 原语 `sample_bucket`（等价改动，剧本仓已改用引擎件）。
+- **剧本通用件**：跨剧本复用的机制以**带默认实现、非破坏**的方式进 `umasim` / `umaai`；首批为温泉剧本 M1 前置的四个通用件（比赛事件构造 / 训练后默认处理 / 羁绊统一出口 / 配置覆盖层泛型解析），默认行为不变、L4 基线未位移。2026-10-24 追加两件：红点完整口径可复用件 `BaseGame::do_hint`（**默认行为不等价**，训练路径红点节奏变化、L4 基线已重录）与分桶采样 pub 原语 `sample_bucket`（等价改动，剧本仓已改用引擎件）。2026-11-01 追加事件通用效果：选项级 `extra_status`（随机 N 项属性 / 上次训练属性，随机抽取走事件流）与训练位记录 `BaseGame::set_last_train`；同时比赛事件构造口径转为真机口径（乘算统一 floor、URA 决赛 73/75/77 独立事件，**默认行为不等价**，L4 三份基线已重录；旧剧本数据缺 `race_ura_*` 键时回退 `race_career` 保持可跑）。
 - workspace 根即项目根（`AGENTS.md` 所在目录）。
 - 剧本（外仓）：独立仓，依赖引用本仓 `umaai-core` / `umasim` / `umaai`，**自带 bin**（入口装配点），本仓不反向依赖；剧本专属类型 / 协议段 / 配置 / 数据与测试夹具均在外仓（2026-10-17 拍板，见 plan §2「剧本仓形态」）
 - 空剧本仓模板 `templates/umaai-scenario/`：**独立 workspace**（根 workspace `exclude`，不进 7 crate 成员表；内部五 crate `scenario-core` / `scenario-sim` / `scenario-ai` / `scenario-cli` / `scenario-tools`，与 `umaai-onsen` 同构），`scenario-core` 只依赖引擎稳定面，`data/` 自持剧本资产与配置默认层，仓内 `AGENTS.md` 记模板规则，`docs/` 自带文档骨架（索引 / 开发计划 / 接入包 / 占位登记 / 机制 / 术语 / 测试 / 交接），`scenario-cli` 提供 `scenario` / `random` / `manual` 三档（manual 为无颜色人工选择）；CI 用 `--manifest-path … --workspace` 单独跑 `fmt` / `check` / `clippy` / `test` 守门；接入指南、仓库形态、开发流程与性能优化见 `docs/scenario/`（P7′）
@@ -25,7 +25,7 @@
 | `umasim` | 计算层：带行为的领域类型 + 契约 trait（`Game` / `Trainer` / 表来源钩子）+ 领域算法（搜索 / 训练员 / NN）；无终端依赖 | `game/{mod,stage,uma,support_card,inherit,traits}`、`game/base/{mod,stage,person,action,basic}`（`BaseGame` 持主种子与两条引擎流，构造期按 `card_id` 拒绝重复支援卡；非卡人头按身份反查、不写死下标〔人头布局契约：卡片前缀逐槽同序 + 非卡尾部追加，前缀不变式有守门测试，训练加成默认实现按前缀直取卡组〕；训练值 / 失败率默认公式与基础局设施等级按基础值表实际长度取值〔等级可多于 5、表外训练点名拒绝〕；**剧本可复用件**：比赛事件构造 `push_race_event`、训练后默认处理 `default_after_train`、羁绊统一出口 `add_friendship`（爱娇与卡面同步只此一处）、红点完整口径 `do_hint`（次数 / 等级双截断 / 单卡累计 / 超限只给属性）、`Person::set_friendship`）、`search/{mod,config,result,searchable,terminal,flat_search,par}`、`trainer` 已落地；呈现 / 协议件延后到上层阶段 |
 | `umaai` | 引擎 lib：`Runner` 主循环 / 协议解析（单场景直连）/ `Config` / 决策编排 / luck / record（无终端与 IO 重依赖） | `config`（默认层 + 同名覆盖层约定 + 具名预设；泛型 `OverlayConfig` / `parse_with_overlay` 供剧本仓配置段复用同一套语义）、`frontend`（事件契约 + 局面摘要）、`decision`（决策 DTO + 决策源接缝）、`runner`（离线一局驱动 + 终局汇总 + 局面摘要下发）、`luck`（运气分与显示分换算）、`record`（运气分装配挂载）、`protocol`（帧通用段 / 事件段 / 终局帧 / 帧通道〔特性 `file-channel`〕）、`session`（帧驱动会话：一帧一决策 + 终局裁决）已落地；记录落盘与入口层接线待后续阶段 |
 | `umaai-cli` | 控制台工具件 + 呈现样例 + 入口层；终端依赖唯一出口 | `render`（`term` 宽度探测 / 折行与颜色门禁、`style` 语义色、`explain` 领域词元〔轴名经核心层单一出口〕、`panel` 面板、`table` 表格封装）、`frontend`（`PrintFrontend` + 三档详细度）、`cli`（参数解析 + 配置覆盖层〔宿主目录可注入，默认当前目录〕+ 选择器映射 + `run_from_args` + stderr 日志器）已落地；lib + 瘦 bin 形态，pub 面不承诺稳定 |
-| `umaai-tools` | 探针 / 基准 / 基线 / 对照 / 组卡测卡工具；dev 重依赖唯一出口（当前零第三方新增） | `batch`（固定种子批量跑局 + 分布统计）、`probe`（固定根搜索成本探针）、`baseline`（基线模型 / 跑法 / 比对 / 读写）、`compare`（分支推进对照：JSON 对照计划 + 单探测动作 vs 默认一选）、`deck`（组卡内核：卡池筛选 / 静态面板分 / 构成枚举〔卡种下限按全卡组 7 类口径，含友人 / 团队与必带卡，口径存疑待 miko 门禁确认〕/ 逐类型实测扫描与多重比较校正 / 两级排序与独立种子集验证 / 自持实验计划 `Plan` / 基础局测量函数 / 卡种原语 `deck_kinds`・`fixed_card_types`）、`arms`（多臂同种子配对跑批内核，测量函数闭包注入）、`cardtest`（测卡内核：固定基准卡组只换一槽或逐槽贪婪 + 显式候选 + 可比性守卫）、`report`（机读单行 + 人读面板与表格）、`cli`（参数解析 + 子命令分发 + 宿主目录可注入）与瘦 bin（单 bin 多子命令 `bench` / `probe` / `baseline` / `compare` / `deck` / `cardtest`）已落地；跑局装配复用 `umaai-cli` 的装配函数、呈现复用其呈现件 |
+| `umaai-tools` | 探针 / 基准 / 基线 / 对照 / 组卡测卡工具；dev 重依赖唯一出口（当前零第三方新增） | `batch`（固定种子批量跑局 + 分布统计）、`probe`（固定根搜索成本探针）、`baseline`（基线模型 / 跑法 / 比对 / 读写）、`compare`（分支推进对照：JSON 对照计划 + 单探测动作 vs 默认一选）、`deck`（组卡内核：卡池筛选 / 静态面板分 / 构成枚举〔卡种下限按全卡组 7 类口径，含友人 / 团队与必带卡，口径存疑待 matsuri 门禁确认〕/ 逐类型实测扫描与多重比较校正 / 两级排序与独立种子集验证 / 自持实验计划 `Plan` / 基础局测量函数 / 卡种原语 `deck_kinds`・`fixed_card_types`）、`arms`（多臂同种子配对跑批内核，测量函数闭包注入）、`cardtest`（测卡内核：固定基准卡组只换一槽或逐槽贪婪 + 显式候选 + 可比性守卫）、`report`（机读单行 + 人读面板与表格）、`cli`（参数解析 + 子命令分发 + 宿主目录可注入）与瘦 bin（单 bin 多子命令 `bench` / `probe` / `baseline` / `compare` / `deck` / `cardtest`）已落地；跑局装配复用 `umaai-cli` 的装配函数、呈现复用其呈现件 |
 | `umaai-tests` | 集成 / 端到端 / baseline 测试；`Checker`（print + 聚合 + 返回 `Err`）+ 共享夹具 | `Checker` 与 `testing` 夹具、`baselines/`（一基线一 JSON）、`tests/basic_game.rs`（基础局固定种子端到端）、`tests/search_smoke.rs`（搜索端到端 + 可复现性守门）、`tests/runner_basic.rs`（经引擎运行与直接模拟逐位一致 + 夹具与默认层同值）、`tests/cli_smoke.rs`（入口装配链跑满一局 + 呈现可复现 + 装配链与覆盖层注入守门）、`tests/session_basic.rs`（合成帧序列会话端到端 + 真通道用例）、`tests/baseline.rs`（基线自动判定）、`tests/tools_smoke.rs`（工具跑批 / 探针 / 组卡 / 测卡 / 入口链冒烟）、`tests/smoke.rs`（测试 crate 装配冒烟）已落地；`crates/umaai/tests/` 另有配置 / 运气分 / 协议 / 帧通道集成测试与真机帧夹具（只保留通用段） |
 | `umaai-update` | 分发客户端公共库（**零引擎依赖**、不在引擎依赖链上）：频道清单协议与发布侧清单生成 / 传输（HTTP + 本地测试模式）/ 无状态哈希判定 / 备份回滚式安装 | `manifest`（协议 + `build`）、`channel`（源常量 + 频道声明 + 目标）、`transport`（`Transport` trait + `HttpTransport`〔特性 `http`，默认开〕）、`testing`（`TestTransport` 内存假源）、`updater`（`check` / `update` / 临时目录与回滚）、`hash`、`error` 已落地；入口接线 / 自更新 / 发布侧待开工（P6c′-a，方案见 `docs/plan/tools_update.md`） |
 
@@ -64,7 +64,7 @@
 - `plan/`：方案（`miko_next_plan.md` 权威 + `v1_plan_reference.md` 参考 + `tools_deck_cardtest.md` 组卡 / 测卡 + `tools_update.md` 自动更新）。
 - `game/`：游戏机制（规则 / 实现细节 / 术语 / 固有效果）。
 - `scenario/`：剧本仓接入指南（`README.md`）+ 仓库形态（`repo_form.md`）+ 开发流程（`dev_process.md`）+ 性能优化（`perf_plan.md`）+ 契约参考（`contracts.md`，P7′）；模板 `templates/umaai-scenario/docs/` 另有本仓文档骨架。
-- `notes/`：开发笔记与待决事项（`open_items.md`）与 miko 新剧本预告（`miko_scenario_preview.md`，持续更新的未确认情报）。
+- `notes/`：开发笔记与待决事项（`open_items.md`）与骏大祭新剧本预告（`matsuri_scenario_preview.md`，持续更新的未确认情报）。
 - `changelog.md`：变更日志（极简，每条一行）。
 - `issues.md`：问题记录（状态 + 排查过程）。
 - `tests_overview.md`：测试一览（分层 + 一行一测试，随实现更新）。

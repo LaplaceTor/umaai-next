@@ -15,7 +15,7 @@ use anyhow::{Result, anyhow};
 use hashbrown::{HashMap, HashSet};
 use rand::Rng;
 use rand::seq::IndexedRandom;
-use umaai_core::gamedata::{ActionValue, ChoiceResult, EventChoice, EventData, TriggerType};
+use umaai_core::gamedata::{ActionValue, ChoiceResult, EventChoice, EventData, ExtraStatus, TriggerType};
 use umaai_core::rng::{EventRng, StreamTag, TurnFixedRng, derive_seed};
 use umaai_core::{Array5, AttributeArray, Data, diag, split_status};
 
@@ -63,6 +63,11 @@ pub struct BaseGame {
     pub events: HashMap<u32, u32>,
     /// 本回合内还没触发的事件(Hint, 点击友人等)
     pub unresolved_events: Vec<EventData>,
+    /// 最近一次训练的训练下标（0–4）；[`ExtraStatus::LastTrain`] 结算用，未训练过为 `None`
+    ///
+    /// 只有训练后事件（失败 / 加练 / 追加稽古等）会消费 `LastTrain` 效果，因此隐含**同回合**语义；
+    /// 引擎不自动清空（跨回合残留不会被使用）。
+    pub last_train: Option<usize>,
     /// 每种训练卡数量，用于训练倾向和固有判断
     pub card_type_count: [i32; 7],
     /// 友人事件 ID 集合（从 `events.friend_events` 派生）
@@ -140,20 +145,39 @@ impl BaseGame {
         self.event = Some(streams.event);
     }
 
-    /// 构造本回合的比赛事件并入队（生涯 / 自选两支统一入口）
+    /// 构造本回合的比赛事件并入队（生涯 / URA 决赛 / 自选统一入口）
     ///
     /// `scale` 是**实际系数**（可直接乘到事件面板上，不是面板值）：默认调用方传
     /// `(100 + uma.race_bonus) / 100`（`race_bonus` 即支援卡「赛后」累加），剧本可在此基础上
     /// 再倍乘自己的机制系数（如温泉生涯赛 ×1.33 × 源泉加成）。
     /// `pt_rate` 只缩放技能点一项，`1.0` 表示不变（供剧本特例单独压低 PT）。
     ///
-    /// 分支口径：生涯回合取 `race_career`；非生涯回合按等级表取 `race_g{grade}`
-    /// （`1 = G1` … `4 = OP`，`0 = 无比赛`）。没有可选比赛时**报错**而不是猜一个等级：
-    /// 决赛期（72–77）只有 73/75/77 的生涯赛，等级表也不覆盖 72 以后。
+    /// 分支口径：生涯回合取 `race_career`；URA 决赛 73/75/77 分别取
+    /// `race_ura_qualifier` / `race_ura_semifinal` / `race_ura_final`（缺失时回退 `race_career`）；
+    /// 非生涯回合按等级表取 `race_g{grade}`（`1 = G1` … `4 = OP`，`0 = 无比赛`）。
+    /// 没有可选比赛时**报错**而不是猜等级：决赛期（72–77）等级表不覆盖 72 以后。
+    ///
+    /// 全部乘算（含随机属性等额外值）统一 **floor**，不四舍五入。
     pub fn push_race_event(&mut self, scale: f64, pt_rate: f64) -> Result<()> {
+        let data = Data::get()?;
         let mut event = if self.uma.is_race_turn(self.turn) {
-            let event = Data::get()?.system_event("race_career")?.clone();
-            diag!(">> 比赛 T{} 生涯 scale={scale:.2} pt_rate={pt_rate:.2}", self.turn);
+            let key = match self.turn {
+                73 => "race_ura_qualifier",
+                75 => "race_ura_semifinal",
+                77 => "race_ura_final",
+                _ => "race_career",
+            };
+            let event = match data.system_event(key) {
+                Ok(event) => event.clone(),
+                Err(_) => {
+                    diag!(">> 系统事件 {key} 缺失，回退 race_career");
+                    data.system_event("race_career")?.clone()
+                }
+            };
+            diag!(
+                ">> 比赛 T{} 生涯({key}) scale={scale:.2} pt_rate={pt_rate:.2}",
+                self.turn
+            );
             event
         } else {
             let grade = self.race_grade().ok_or_else(|| {
@@ -163,18 +187,18 @@ impl BaseGame {
                     self.race_grades.len()
                 )
             })?;
-            let event = Data::get()?.system_event(&format!("race_g{grade}"))?.clone();
+            let event = data.system_event(&format!("race_g{grade}"))?.clone();
             diag!(
                 ">> 比赛 T{} 自选G{grade} scale={scale:.2} pt_rate={pt_rate:.2}",
                 self.turn
             );
             event
         };
-        // 系数一律 f64（新仓口径），面板值 round 后写回
-        event.map_status(|x| (f64::from(x) * scale).round() as i32);
+        // 系数一律 f64；面板值（含 ExtraStatus 增量）统一 floor 后写回
+        event.map_status(|x| (f64::from(x) * scale).floor() as i32);
         if pt_rate != 1.0 {
             let value = &mut event.choices[0][0].value;
-            value.status_pt[5] = (f64::from(value.status_pt[5]) * pt_rate).round() as i32;
+            value.status_pt[5] = (f64::from(value.status_pt[5]) * pt_rate).floor() as i32;
         }
         self.unresolved_events.push(event);
         self.uma.set_race(self.turn);
@@ -234,6 +258,7 @@ impl BaseGame {
         rng: &mut impl Rng,
     ) -> Result<()> {
         use crate::game::FriendOutState;
+        self.set_last_train(train);
         let mut hint_persons = vec![];
         let mut friend_clicked = false;
         let mut yayoi_clicked = false;
@@ -498,6 +523,7 @@ impl BaseGame {
             events: HashMap::new(),
             absent_rate_drop: 0,
             unresolved_events: vec![],
+            last_train: None,
             card_type_count,
             // 从 events.friend_events 派生友人事件 ID
             friend_event_ids: Data::get()?.events.friend_events.values().map(|e| e.id).collect(),
@@ -524,6 +550,15 @@ impl BaseGame {
         available_events.choose(rng).map(|e| (*e).clone())
     }
 
+    /// 写入本回合最近一次训练的训练下标（[`ExtraStatus::LastTrain`] 结算用）
+    ///
+    /// 训练结算归剧本实现（契约 `Game` 不提供 `do_train`），引擎无从得知；因此
+    /// 剧本自写 `do_train` 时调用本方法，或经 [`Self::default_after_train`] 自动记录。
+    /// 只有训练后事件会消费 `LastTrain`，同回合语义由事件来源隐含；引擎不自动清空。
+    pub fn set_last_train(&mut self, train: usize) {
+        self.last_train = Some(train);
+    }
+
     /// 已经选择了选项组 choice，按概率随机决定组内结果
     pub fn random_select_choice_result(&self, choices: &[EventChoice], rng: &mut impl Rng) -> Option<EventChoice> {
         if choices.is_empty() {
@@ -546,7 +581,10 @@ impl BaseGame {
                     Self::apply_friend_bonus(&mut choice_result.value, &self.friend);
                 }
                 self.uma.add_value(&choice_result.value);
-                // 结算叙事：结果档（普通档略）+ 入账摘要 + 友人加成注记；三者皆空不落日志
+                if let Some(extra) = choice_result.extra_status {
+                    self.apply_extra_status(extra, rng);
+                }
+                // 结算叙事：结果档（普通档略）+ 入账摘要 + 额外属性 + 友人加成注记；皆空不落日志
                 let mut parts: Vec<String> = vec![];
                 if let Some(result) = diag_result_note(choice_result.result) {
                     parts.push(result.to_string());
@@ -554,6 +592,9 @@ impl BaseGame {
                 let value = choice_result.value.to_string();
                 if !value.is_empty() {
                     parts.push(format!("入账 {value}"));
+                }
+                if let Some(extra) = choice_result.extra_status {
+                    parts.push(format!("额外{extra}"));
                 }
                 if friend {
                     parts.push("含友人加成".to_string());
@@ -568,6 +609,29 @@ impl BaseGame {
         } else {
             None
         }
+    }
+
+    /// 结算 [`ExtraStatus`]：随机的属性项用事件流无放回等概率抽取；上次训练项取 `last_train`
+    ///
+    /// `last_train` 缺失（事件不在训练上下文）时记诊断并忽略，不猜训练位。
+    fn apply_extra_status(&mut self, extra: ExtraStatus, rng: &mut impl Rng) {
+        let mut delta = ActionValue::default();
+        match extra {
+            ExtraStatus::Random { count, value } => {
+                let count = usize::from(count).min(5);
+                for index in rand::seq::index::sample(rng, 5, count).iter() {
+                    delta.status_pt[index] += value;
+                }
+            }
+            ExtraStatus::LastTrain { value } => match self.last_train {
+                Some(train) if train < 5 => delta.status_pt[train] += value,
+                _ => {
+                    diag!("额外属性「上次训练」效果缺少 last_train 记录，已忽略");
+                    return;
+                }
+            },
+        }
+        self.uma.add_value(&delta);
     }
 
     /// 事件应归属的人头下标
@@ -608,6 +672,9 @@ impl BaseGame {
     }
 
     /// 结算某个事件选项（数值 + 状态）
+    ///
+    /// 无随机流：只结算固定值与 [`ExtraStatus::LastTrain`]；`Random` 需随机流，走
+    /// [`Self::apply_event`]，这里记诊断后忽略。
     pub fn apply_event_choice(&mut self, choice: &EventChoice) {
         // 结算叙事：入账摘要与状态增减（词形见 `UmaFlags` 的 `Display`）；皆空不落日志
         let mut parts: Vec<String> = vec![];
@@ -629,6 +696,20 @@ impl BaseGame {
         }
         if !parts.is_empty() {
             diag!("事件选项结算: {}", parts.join(" "));
+        }
+        match choice.extra_status {
+            Some(ExtraStatus::LastTrain { value }) => match self.last_train {
+                Some(train) if train < 5 => {
+                    let mut delta = ActionValue::default();
+                    delta.status_pt[train] += value;
+                    self.uma.add_value(&delta);
+                }
+                _ => diag!("额外属性「上次训练」效果缺少 last_train 记录，已忽略"),
+            },
+            Some(ExtraStatus::Random { .. }) => {
+                diag!("额外属性「随机」效果需要随机流，apply_event_choice 已忽略")
+            }
+            None => {}
         }
         self.uma.add_value(&choice.value);
         self.uma.update_flags(choice);
@@ -1083,7 +1164,7 @@ mod tests {
         Ok(())
     }
 
-    /// H1：`pt_rate` 只缩放技能点一项
+    /// H1：`pt_rate` 只缩放技能点一项（统一 floor）
     #[test]
     fn test_push_race_event_pt_rate() -> Result<()> {
         let mut game = crate::testutil::basic_game()?;
@@ -1094,8 +1175,96 @@ mod tests {
         game.unresolved_events.clear();
         game.push_race_event(scale, 0.5)?;
         let half_pt = game.unresolved_events[0].choices[0][0].value.status_pt[5];
-        assert_eq!(half_pt, (base_pt as f64 * 0.5).round() as i32);
+        assert_eq!(half_pt, (base_pt as f64 * 0.5).floor() as i32);
         println!("H1: pt_rate 只缩放技能点（{base_pt} -> {half_pt}）");
+        Ok(())
+    }
+
+    /// 比赛面板乘算统一 floor（不四舍五入）
+    #[test]
+    fn test_push_race_event_floor_rounding() -> Result<()> {
+        let mut game = crate::testutil::basic_game()?;
+        game.turn = 11;
+        game.uma.race_bonus = 30;
+        game.push_race_event(1.3, 1.0)?;
+        // race_career 固定值 7 → 7 × 1.3 = 9.1 → floor 9（round 会得 9 也相同，PT 用于区分）
+        let value = &game.unresolved_events[0].choices[0][0].value;
+        assert_eq!(value.status_pt[0], 9);
+        // 7 × 1.3 = 9.1 两种取整相同；PT 67 × 1.3 = 87.1 亦同——改用 1.25 区分
+        game.unresolved_events.clear();
+        game.push_race_event(1.25, 1.0)?;
+        let value = &game.unresolved_events[0].choices[0][0].value;
+        assert_eq!(value.status_pt[0], 8, "7 × 1.25 = 8.75 → floor 8");
+        assert_eq!(value.status_pt[5], 83, "67 × 1.25 = 83.75 → floor 83");
+        println!("比赛乘算 floor 生效");
+        Ok(())
+    }
+
+    /// URA 决赛 73/75/77 取各自事件键（缺失时回退 race_career）
+    #[test]
+    fn test_push_race_event_ura_keys() -> Result<()> {
+        let mut game = crate::testutil::basic_game()?;
+        for (turn, expected) in [(73, "URA决赛预选"), (75, "URA决赛准决胜"), (77, "URA决赛决胜")] {
+            game.turn = turn;
+            game.unresolved_events.clear();
+            game.push_race_event(1.0, 1.0)?;
+            let name = &game.unresolved_events[0].name;
+            assert_eq!(name, expected, "T{turn} 应取 {expected} 事件，实际 {name}");
+        }
+        println!("URA 决赛事件键分支正确");
+        Ok(())
+    }
+
+    /// `ExtraStatus::Random`：事件流无放回抽取，固定种子可复现
+    #[test]
+    fn test_apply_extra_status_random() -> Result<()> {
+        use rand::SeedableRng;
+        use rand::rngs::StdRng;
+
+        let mut a = crate::testutil::basic_game()?;
+        let mut b = a.clone();
+        let mut rng_a = StdRng::seed_from_u64(7);
+        let mut rng_b = StdRng::seed_from_u64(7);
+        let extra = ExtraStatus::Random { count: 2, value: 10 };
+        let before = a.uma.five_status;
+        a.apply_extra_status(extra, &mut rng_a);
+        b.apply_extra_status(extra, &mut rng_b);
+        assert_eq!(a.uma.five_status, b.uma.five_status, "同种子应复现");
+        let gained: i32 = a
+            .uma
+            .five_status
+            .iter()
+            .zip(before.iter())
+            .map(|(after, before)| after - before)
+            .sum();
+        assert_eq!(gained, 20, "抽 2 项各 +10，共 +20");
+        let hits = a
+            .uma
+            .five_status
+            .iter()
+            .zip(before.iter())
+            .filter(|(after, before)| after != before)
+            .count();
+        assert_eq!(hits, 2, "应恰好命中 2 个不同属性");
+        println!("额外属性随机效果正确：{before:?} -> {:?}", a.uma.five_status);
+        Ok(())
+    }
+
+    /// `ExtraStatus::LastTrain`：命中上次训练位；缺失记录时忽略
+    #[test]
+    fn test_apply_extra_status_last_train() -> Result<()> {
+        use rand::SeedableRng;
+        use rand::rngs::StdRng;
+
+        let mut game = crate::testutil::basic_game()?;
+        let mut rng = StdRng::seed_from_u64(1);
+        let before = game.uma.five_status;
+        game.apply_extra_status(ExtraStatus::LastTrain { value: 20 }, &mut rng);
+        assert_eq!(game.uma.five_status, before, "无 last_train 时应忽略");
+        game.set_last_train(2);
+        game.apply_extra_status(ExtraStatus::LastTrain { value: 20 }, &mut rng);
+        assert_eq!(game.uma.five_status[2], before[2] + 20, "应加在上次训练位");
+        println!("上次训练属性效果正确");
         Ok(())
     }
 
@@ -1139,9 +1308,20 @@ mod tests {
         let mut game = crate::testutil::basic_game()?;
         game.turn = 22; // 等级表为 1（G1）
         game.push_race_event(1.0, 1.0)?;
-        let name = &game.unresolved_events[0].name;
-        assert_eq!(name, "G1比赛", "G1 回合应生成 G1 事件，实际 {name}");
-        println!("G1 回合事件正确: {name}");
+        let event = &game.unresolved_events[0];
+        assert_eq!(event.name, "G1比赛", "G1 回合应生成 G1 事件");
+        let choice = &event.choices[0][0];
+        assert_eq!(
+            choice.value.status_pt,
+            [0, 0, 0, 0, 0, 45],
+            "非目标 G1：五维走随机项、SP 45"
+        );
+        assert_eq!(
+            choice.extra_status,
+            Some(ExtraStatus::Random { count: 1, value: 10 }),
+            "非目标 G1 应为随机 1 项 +10（数据缺字段 / 层级放错即此断言报警）"
+        );
+        println!("G1 回合事件正确（随机 1 项 +10 / SP45）");
         Ok(())
     }
 
