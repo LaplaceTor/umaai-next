@@ -3,19 +3,19 @@
 本文件对照源码列出全部测试：按 crate 分节、按文件分小节、一行一条，便于定位用例与评估覆盖面。
 测试分层与判定口径的设计依据见 [`plan/miko_next_plan.md`](plan/miko_next_plan.md) 的「测试策略」节。
 
-口径（2026-11-01 实测，stable 工具链 Release 模式）：`cargo test --workspace --release` → **355 passed / 0 failed / 3 ignored**；
-`cargo test --workspace --release -- --list` 共列出 **358 条**（356 个 `#[test]` + 2 个 doctest，其中 umasim 的 ignored doctest 不入清单）。
+口径（2026-11-05 实测，stable 工具链 Release 模式）：`cargo test --workspace --release` → **356 passed / 0 failed / 3 ignored**；
+`cargo test --workspace --release -- --list` 共列出 **359 条**（357 个 `#[test]` + 2 个 doctest，其中 umasim 的 ignored doctest 不入清单）。
 
 | 层 | 位置 | 判定 | 条数 |
 |---|---|---|---|
-| L1 单元 | `crates/<crate>/src/`（内联 `#[cfg(test)]`） | `assert` | 299 |
+| L1 单元 | `crates/<crate>/src/`（内联 `#[cfg(test)]`） | `assert` | 300 |
 | L2 模块集成 | `crates/<crate>/tests/` | print + `Checker` / `Checks`（失败返回 `Err`） | 35 |
 | L3 跨 crate 端到端 | `crates/umaai-tests/tests/` | print + `Checker`（失败返回 `Err`） | 21 |
 | L4 baseline | `crates/umaai-tests/tests/baseline.rs` + `crates/umaai-tests/baselines/*.json` | 比对后返回 `Err` / 非零退出码 | 1 |
 | 文档示例 | doctest | `umasim` 1 条标 `ignore` 不执行；`umaai-update` 1 条随测试执行 | 2 |
-| **合计** | | | **358** |
+| **合计** | | | **359** |
 
-- 分 crate：`umaai-core` 74 · `umasim` 78 · `umaai` 70 · `umaai-cli` 31 · `umaai-tools` 54 · `umaai-tests` 22 · `umaai-update` 29。
+- 分 crate：`umaai-core` 75 · `umasim` 78 · `umaai` 70 · `umaai-cli` 31 · `umaai-tools` 54 · `umaai-tests` 22 · `umaai-update` 29。
 - 默认跳过 3 条（需手动跑 `--ignored`）：`channel_watches_real_writes`（真 watcher 写入链路）、`session_runs_on_real_channel`（真通道收局）、`define_terminal_record` 的 doctest（标记 `ignore`）。
 
 ## 运行方式
@@ -40,7 +40,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 - 空剧本仓模板是**独立 workspace**（不在 workspace 成员表内）：`cargo fmt --manifest-path templates/umaai-scenario/Cargo.toml --all --check` + `cargo check --manifest-path templates/umaai-scenario/Cargo.toml --workspace --all-targets` + `cargo clippy --manifest-path templates/umaai-scenario/Cargo.toml --workspace --all-targets -- -D warnings` + `cargo test --manifest-path templates/umaai-scenario/Cargo.toml --workspace --release`（CI 单独一步，守验收条款「不改引擎一行即可编过」）；模板自带 10 条纯逻辑单测（阶段 / 数据 / 配置 / 训练员），不依赖 `data/` 真实数据，固定种子基线由真实剧本仓自持。
 
 ## 目录
-- [umaai-core (74)](#umaai-core-74)
+- [umaai-core (75)](#umaai-core-75)
   - [`src/array.rs` (2)](#srcarrayrs-2)
   - [`src/crn.rs` (5)](#srccrnrs-5)
   - [`src/data/manifest.rs` (1)](#srcdatamanifestrs-1)
@@ -161,10 +161,11 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 **事件额外属性效果校验**
 - `test_validate_extra_status_range` — 随机项数 1–5 通过、0 / 6 越界报错
 
-### `src/diag.rs` (4)
+### `src/diag.rs` (5)
 
 **编译期开关**
 - `test_compiled_in_follows_feature` — 编译期开关取值与编译特性一致
+- `test_active_follows_both_switches` — 统一开关查询同时受编译期特性与运行时开关支配
 
 **运行时开关与抑制守卫**
 - `test_guard_suppress_and_restore` — 抑制守卫作用域内关闭，释放后恢复默认开启
