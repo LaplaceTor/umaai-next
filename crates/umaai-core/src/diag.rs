@@ -66,17 +66,26 @@ pub struct DiagGuard {
 
 impl DiagGuard {
     /// 关闭诊断输出并返回恢复 guard
+    ///
+    /// 只在**需要切换**时写开关：开关已关闭时不再重复 store。该开关在训练 / 资源预览里
+    /// 每个候选创建一次 guard，是并行 rollout 的热路径；重复 store 会让缓存行在核心间
+    /// 反复失效。语义不变：guard 仍恢复进入前的值。
     #[must_use = "guard 被 drop 前诊断输出一直关闭，请绑定到变量以覆盖整个作用域"]
     pub fn suppress() -> Self {
         let prev = enabled();
-        set_enabled(false);
+        if prev {
+            set_enabled(false);
+        }
         Self { prev }
     }
 }
 
 impl Drop for DiagGuard {
     fn drop(&mut self) {
-        set_enabled(self.prev);
+        // 当前值已等于进入前的值时不写：内层 guard（prev=false）的 drop 不产生冗余 store
+        if enabled() != self.prev {
+            set_enabled(self.prev);
+        }
     }
 }
 
