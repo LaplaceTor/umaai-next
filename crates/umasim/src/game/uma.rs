@@ -523,11 +523,10 @@ mod tests {
             .iter_mut()
             .zip(uma.five_status.iter().zip(uma.five_status_limit.iter()))
         {
-            // 刻意不调 `cons.status_final_score()`：这份是用来对照 `score_parts()` 的
-            // 独立实现，两边共用同一个查表函数就不再是 oracle 了。
-            let table = &cons.five_status_final_score;
-            let status = (*value).min(*limit).max(0) as usize;
-            *slot = table[status.min(table.len() - 1)];
+            // 五维按 core 的评分规格取值；本用例守的是 `score_parts()` 的夹取、
+            // 折算系数与分量求和，公式本身由 core 锚点与 L3 逐位对照守门。
+            let status = (*value).min(*limit).max(0);
+            *slot = umaai_core::score::status_point(status);
         }
         // 切者/小切的 PT 折算加成：独立写死系数，保证能抓住实现里的系数写错
         let pt_factor = if uma.flags.qiezhe {
