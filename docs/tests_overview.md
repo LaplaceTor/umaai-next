@@ -432,7 +432,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 
 ### `src/search/result.rs` (3)
 
-- `test_weighted_mean_two_score_groups` — 等频双峰的排名加权口径，越界分数按钳位入桶
+- `test_weighted_mean_two_score_groups` — 等频双峰的排名加权口径；110k 不再钳位入桶，按真实分值参与加权
 - `test_degenerate` — 空样本与单样本取中性值且不触发 panic
 - `test_best_action_idx` — 最优动作按下标选出，终局统计与动作等长
 
