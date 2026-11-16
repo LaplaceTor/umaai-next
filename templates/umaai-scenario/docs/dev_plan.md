@@ -28,7 +28,7 @@
 | **S0 机制与用语核对** | 收集来源、核对静态表、逐组向用户确认机制与术语 | [`intake.md`](intake.md) + [`mechanism.md`](mechanism.md) + [`../GLOSSARY.md`](../GLOSSARY.md) | 无「机制未确认」项，用户确认开工 | ☐ |
 | **S1 建仓与装配** | 改名、调整依赖三档、拷入 `data/`、改 CI | 可编译空壳 + 可启动 bin | `fmt` / `check` / `clippy` / `test` 绿 | ☐ |
 | **S2 数据层** | 剧本资产 schema（严格校验）+ 剧本配置覆盖层 | `core/src/data.rs`、`config.rs` | 载入 / 缺字段 / 未知键 / 长度一致性单测 | ☐ |
-| **S3 局面与阶段机** | `Game` 22 必备项、阶段枚举与 `StageId`、三轴随机、`fork_for_rollout` | `core/src/game/{mod,stage}.rs` | 固定种子跑满回合、两次逐位一致、未注入主种子报错 | ☐ |
+| **S3 局面与阶段机** | `Game` 2 关联类型 + 22 必备方法、阶段枚举与 `StageId`、三轴随机、`fork_for_rollout` | `core/src/game/{mod,stage}.rs` | 固定种子跑满回合、两次逐位一致、未注入主种子报错 | ☐ |
 | **S4 动作与结算** | `ActionEnum` + `apply`、训练 / 比赛 / 休息 / 出行 / 治病等动作集 | `core/src/game/action.rs` | 单动作单测；`apply_root_action` 与 `run_stage` 逐字一致 | ☐ |
 | **S5 机制** | 剧本资源、训练加成、特例公式、上限与分档 | `core/src/game/*`、[`mechanism.md`](mechanism.md) | 每条数值口径一个机制单测（公式 + 边界） | ☐ |
 | **S6 事件** | 固定回合 / 角色 / 随机分布事件生成与特例结算 | `core/src/game/event.rs`（按需新建） | 固定回合、分布抽样、成功/失败分支单测 | ☐ |

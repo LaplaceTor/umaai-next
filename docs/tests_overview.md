@@ -11,7 +11,7 @@
 | L3 跨 crate 端到端 | `umaai-tests/tests/{basic_game,cli_smoke,rule_streams,runner_basic,search_smoke,session_basic,smoke,status_score,tools_smoke}.rs` | `print` + `Checker`（返回 `Result`） |
 | L4 baseline | `umaai-tests/tests/baseline.rs` + `umaai-tests/baselines/*.json` | 逐项容差比对（返回 `Err`） |
 
-- **只含内联单测的 crate**：`umasim`（另含 1 条 `#[ignore]` doctest）、`umaai-cli`、`umaai-tools`（工具端到端统一放 `umaai-tests/tests/tools_smoke.rs`）。
+- **只含内联单测的 crate**：`umasim`（另含 1 条 `` `ignore` `` doctest）、`umaai-cli`、`umaai-tools`（工具端到端统一放 `umaai-tests/tests/tools_smoke.rs`）。
 - **配置与数据约定**：默认层 `<数据根>/ai_config.toml`，覆盖层 `<宿主目录>/ai_config.toml`（宿主目录由入口注入，运行目录不得残留覆盖层污染）；`DataSource` 同时覆盖 `DirSource` 与 `MemorySource`。
 
 ## 2. 常用运行与降级矩阵
@@ -25,7 +25,7 @@ cargo test --workspace --release --offline -- --list
 cargo test --workspace --release --offline -- --ignored --nocapture
 
 # 三档可选特性降级验证（确保不引入对应重依赖且编过/测过）
-cargo check -p umaai --no-default-features                                 # 关 file-channel（无 notify）
+cargo check -p umaai --no-default-features                                 # 关 file-channel 与 parallel（无 notify / rayon）
 cargo test -p umasim -p umaai --release --offline --no-default-features    # 关 parallel（无 rayon，串行降级）
 cargo test -p umaai-update --release --offline --no-default-features       # 关 http（无 ureq，全走 TestTransport）
 

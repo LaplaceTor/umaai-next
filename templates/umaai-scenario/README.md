@@ -24,7 +24,8 @@ umaai-cli  = { path = "umaai_next/crates/umaai-cli" }   # 仅终端入口需要�
 # umaai = { git = "<engine repo>", tag = "engine-v0.1.0" }
 
 # 3. 下游（Web / Android）：自喂帧、无文件监听，并剪掉并行后端
-# umaai = { git = "<engine repo>", tag = "engine-v0.1.0", default-features = false }
+# umasim = { git = "<engine repo>", tag = "engine-v0.1.0", default-features = false }
+# umaai  = { git = "<engine repo>", tag = "engine-v0.1.0", default-features = false }
 ```
 
 ## 3. 运行与验收

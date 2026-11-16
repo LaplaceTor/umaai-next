@@ -1,6 +1,6 @@
 # 活跃待办（Todo）
 
-> 统一收拢未闭环的活跃待办；已落地事项不留存（架构决策进 [`adr/`](adr/)，口径与基线位移进 [`changelog.md`](changelog.md)）。
+> 统一收拢未闭环的活跃待办；已落地事项不留存（架构决策进 [`adr/`](adr/)，历史变更回顾进 [`changelog.md`](changelog.md)）。
 
 ## 1. 更新与分发（`umaai-update` 后续）
 
@@ -17,6 +17,8 @@
 - **事件成功/失败通用成功率校准**：待真实剧本与真机数据对齐后，细化成功率表或改为「决策看两支期望 + 结算取真机结果」（保持决策与结算同源）。
 - **非卡人头帧羁绊还原**：`friendship_noncard_yayoi/reporter` 接线（待有真实非卡人头羁绊需求时）。
 - **RNG 长期演进**：`rand 0.9.5` 升级 `0.10` 的 `StdRng` 去 `Clone` 障碍，长期可评估迁往可 `Copy` 的自有 RNG 或 `Xoshiro256PlusPlus`。
+- **支援卡固有类型 20（`120`）加成上下界核对**：`support_card.rs` 当前写 `(*count).max(2)`（至少 +2），待与 `cardDB.json` 摘要「最多 +2」（`min(2)`）及真机实测核对。
+- **`BaseGame::apply_event` 底座重命名**：避免与 `Game::apply_event` 契约方法同名，消除 `Deref` 解析歧义风险。
 
 ## 3. 搜索、呈现与平台扩展
 
@@ -25,6 +27,7 @@
 - **剧本特化辅助渲染原语**：分布/资源面板原语（按真实剧本需求定形，剧本侧供数 + 调引擎原语，不进契约 trait）。
 - **`PrintFrontend` 回合末态行格式**：行内补充马娘名字、去掉与下游重复的 `T{n}` 前缀（纯显示格式，不影响基线）。
 - **在线记录落盘**：CSV / 归档 / 趋势图列契约（待复盘工具或在线运行消费者定形）。
+- **CI 与模板细节收口**：`ci.yml` 补跑 `umaai-update --no-default-features` 测试；模板 `ScenarioGame::train_level` 改为按训练表实际行数夹取（替代 `.clamp(1, 5)`）；清理 `umasim::search` 残留的外挂 CRN 旧注释与禁用别名注释。
 
 ## 4. 工具与生态（`umaai-tools`）
 

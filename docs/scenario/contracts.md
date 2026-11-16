@@ -8,8 +8,8 @@
 | 契约面 | 变更红线 |
 |---|---|
 | `Game` / `TrainingValueSource` | 新增 trait 方法**必须提供默认实现**（非破坏），且默认行为与旧逻辑等价；不得破坏人头布局契约（卡片前缀与 `deck` 逐槽同序、非卡人头尾部追加、不写死 `person_index`）。 |
-| `Person` / `ActionEnum` | 保持 `BasePerson` 兼容与 `ActionEnum::as_base_action` 默认实现；动作 `apply` 不消费随机流。 |
-| `Trainer` / `FlatSearchGame` | 维持 `select_event_choice` 回退至 `select_choice`；保持 `apply_root_action` 与 `run_stage` 一致性、`fork_for_rollout` 分支隔离；`SUPPORTS_TRUNCATED_LEAF = false` 时直接拒绝 `max_depth > 0`，不静默降级；CRN 配对由每回合派生承担，不引入外挂重播种。 |
+| `Person` / `ActionEnum` | 保持 `BasePerson` 兼容与 `ActionEnum::as_base_action` 默认实现；动作 `apply` 只消费策略流，不消费决策流。 |
+| `Trainer` / `FlatSearchGame` | 维持 `select_event_choice` 回退至 `select_choice`；保持 `apply_root_action`（及可选 `finish_root_stage` 默认钩子）与 `run_stage` 一致性、`fork_for_rollout` 分支隔离；`SUPPORTS_TRUNCATED_LEAF = false` 时直接拒绝 `max_depth > 0`，不静默降级；CRN 配对由每回合派生承担，不引入外挂重播种。 |
 | `Frontend` | 全部回调保持默认空实现；**契约 trait 永不加呈现方法**，剧本专属资源由剧本自持 `View` 快照提供。 |
 | `StageId` / 规则流 / 装配 | 引擎对 `StageId` 只透传、不做分支；`BaseGame` 底座公开方法（如 `init_rule_streams`）不得与 `Game` 契约方法（`set_rule_master`）同名；`Runner` / `Session` / `DataSource` / `Config` 保持无硬编码路径注入。 |
 

@@ -46,5 +46,5 @@
 
 ## 4. 守门与明确不做
 
-- **守门**：L1（20 条内联单测）+ L2（`crates/umaai-update/tests/update_flow.rs` 8 条），`cargo test -p umaai-update --release` 与 `--no-default-features` 全绿；不进 L4 基线，测试不联网。
+- **守门**：L1 内联单测 + L2（`crates/umaai-update/tests/update_flow.rs`），`cargo test -p umaai-update --release` 与 `--no-default-features` 全绿；不进 L4 基线，测试不联网。
 - **明确不做**：独立 GUI 更新器、进程内热更新、本地目录传输模式、整包 zip / 二进制 diff、断点续传、多源镜像、本地版本状态文件、`[update]` 配置段、静默自动应用、内置剧本频道。

@@ -15,7 +15,7 @@
 | [`tools_deck.md`](tools_deck.md) | 组卡 / 测卡工具（`deck` / `cardtest`）口径、流水线与统计纪律 | 使用或修改组卡/测卡工具时 |
 | [`update.md`](update.md) | 分发更新库（`umaai-update`）协议、安装口径与待接入口设计 | 维护更新库或对接 CLI/自更新/发布侧时 |
 | [`todo.md`](todo.md) | 跨阶段收拢的未闭环活跃待办清单 | 认领待办或规划下一轮开发时 |
-| [`changelog.md`](changelog.md) | 按日期升序的口径裁定与基线位移审计账本（只追加） | 拍板新口径/重录基线时追加，或追溯历史裁定原因 |
+| [`changelog.md`](changelog.md) | 按日期倒序的任务变更历史记录（最新在前，便于回顾） | 完成任务/阶段提交或追溯历史改动时 |
 | [`adr/`](adr/) | 架构与核心算法范式决策记录（规范见 [`agents/domain.md`](agents/domain.md)） | 探索架构边界、评估或推翻架构/算法范式决策时 |
 | [`agents/`](agents/) | 仓内 Agent 协作规范（领域文档 / 交接 / Issue / 调研等） | 执行对应 Agent 协作流程时 |
 | [`scenario/README.md`](scenario/README.md) | 独立剧本仓接入与引擎维护者配合边界索引 | 维护剧本模板、契约或新增引擎钩子时 |

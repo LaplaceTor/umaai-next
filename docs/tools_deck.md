@@ -21,15 +21,15 @@
 | 4 | 单类型张数上限 `max_per_type` | 参数化，默认不限，由剧本层声明 |
 | 5 | 卡种数下限 `min_types` | 默认不限；口径为**全卡组 7 类**（含友人 / 团队与必带卡） |
 | 6 | 参考卡组 | 默认取 GA 万能骨架（30289 / 30312 / 30317 / 30306 / 30304，速2耐1智2） |
-| 7 | 剪枝档 | 默认 **`measured`（逐类型实测扫描）**；`static` 为快档/兜底；`none` 不剪枝 |
+| 7 | 剪枝档 | 默认 **`measured`（逐类型实测扫描）**；`static` 为静态面板分快档/兜底 |
 | 8 | 测量训练员 | 剧本层用**剧本特化手写逻辑**；本仓基础局档用契约随机训练员（仅供自测，结论不外推） |
 | 9 | 落盘 | 只出 stdout（人读表 + 机读单行）；CSV / 图延后（见 [`todo.md`](todo.md)） |
 
 ## 3. 通用层流水线与守卫
 
 ```text
-阶段 1  scan     逐类型实测扫描：固定参考卡组其余槽位，只替换目标类型槽位，同种子配对跑批 → Top-K（默认 5）
-阶段 2  compose  构成枚举 + 组装（受 DeckSpec 约束；method = enum | greedy）
+阶段 1  scan     逐类型实测扫描：固定参考卡组其余槽位，只替换目标类型槽位，同种子配对跑批输出全量候选
+阶段 2  compose  构成枚举 + Top-K（默认 5）代表卡组装（受 DeckSpec 约束）
 阶段 3  rank     整体实测排序：每构成一副代表卡组 → 粗筛（少局）→ 精评（多局）→ 独立种子集 holdout
 ```
 
@@ -44,7 +44,7 @@
 
 ```text
 umaai-tools deck
-  --stage scan|compose|rank|all   --prune static|measured|none
+  --stage scan|compose|rank|all   --prune static|measured
   --card-id-min <N>               --exclude <id,id> | --no-exclude
   --seed-deck <idrank,...>        --top-k <N>  --slots <N>  --fixed <槽位=idrank>
   --max-per-type <N>              --min-types <N>
@@ -60,7 +60,7 @@ umaai-tools cardtest
 ```
 
 - **统计与报告纪律**：
-  - 每臂输出 `n / mean / median / sd / p10`；配对输出 `Δmean / Δsd / SE / t / 95%CI / 胜·负·平`。
+  - 底层统计结构（`arms::Arm` / `stats::Paired`）计算 `n / mean / median / sd / p10` 与 `Δmean / Δsd / SE / t / 95%CI / 胜·负·平`；CLI 表格与机读行按子命令输出核心列（`Δmean / Δsd / 95%CI / 胜·负·平` 等）。
   - 默认只报 CI，不做二元「显著」判决；`--correct` 可选 `bonferroni` / `holm`（仅加校正列，不改排序）。
   - 报告必须绑定上下文（参考卡组、训练员、种子集、局数）；异常局保留不补采，配对键不一致即报错。
 - **自持实验计划（`deck --plan`）**：仅 `deck` 支持；`stage` 与 `seed` 必给，其余取工具常量（不读配置层）；严格解析（`deny_unknown_fields`），实验变量与 CLI 同名开关互斥。

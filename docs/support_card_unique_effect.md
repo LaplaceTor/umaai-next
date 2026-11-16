@@ -1,7 +1,7 @@
 # 支援卡固有效果（unique_effect）
 
-> 本文档是 [`mechanism.md`](mechanism.md) §10.3 的展开清单，记录支援卡**固有效果**的编号体系、映射规则与引擎接入状态。
-> 数据源：`gamedata/cardDB.json`、导出脚本 `scripts/export_support_card/main.py`、`crates/umasim/src/game/support_card.rs`。
+> 本文档是 [`mechanism.md`](mechanism.md) §3 的展开清单，记录支援卡**固有效果**的编号体系、映射规则与引擎接入状态。
+> 数据源：`gamedata/cardDB.json`、`crates/umasim/src/game/support_card.rs`（导出映射源于外部脚本 `export_support_card/main.py`，本仓不收录，以 `cardDB.json` 实据为准）。
 
 ---
 
@@ -14,13 +14,13 @@
 
 - **`uniqueEffectParam[0]` 始终保留原始游戏 ID**（`101/102/…/122`），用于溯源与校验；`uniqueEffectSummary` 为中文摘要。
 - **词条 ID**：`0` 无、`1` 友情、`2` 干劲、`3..7` 副属性（速耐力根智）、`8` 训练效果、`9..13` 初始五维、`14` 初始羁绊、`15` 赛后、`16` 粉丝、`17` Hint 等级、`18` Hint 率、`19` 得意率、`20..24` 五维上限、`25` 事件回复、`26` 事件属性、`27` 失败率下降、`28` 体力消耗下降、`29` 小游戏、`30` SP 加成、`31` 智回体、`33` Hint 数量、`41` ALL、`99` 全属性。
-- `CardTrainingEffect::add_effect_line` 目前处理 `1, 2, 3..8, 15, 19, 27, 28, 30, 31, 33, 41`，其余打印「未知效果词条」。
+- `CardTrainingEffect::add_effect_line` 目前处理 `1, 2, 3..=8, 15, 19, 27, 28, 30, 31, 33, 41`（其中 `41` 全五维固定 `+1`），其余（含 `9..=14`）静默跳过。
 
 ---
 
 ## 2. 游戏 ID → AI 固有类型 ID 映射
 
-权威实现：`scripts/export_support_card/main.py::prepareUniqueEffect`。
+映射规则（外部导出脚本 `prepareUniqueEffect`，产物固化于 `gamedata/cardDB.json`）：
 
 | 条件（游戏 `type`） | AI 类型 | 说明 |
 |---|---|---|
@@ -43,7 +43,7 @@
 | `1 / 2` | 101 | `friendship >= param[1]` 时应用至多两条词条（`param[2..4]` 与 `param[4..6]`） |
 | `5` | 105 | **不走 `calc_training_effect`**，在 `BaseGame::new` 构造期按编成卡种计入初始五维（训练系对应属性 `+param[1]`，友人/团队全五维 `+param[2]`，多张叠加） |
 | `13` | 113 | 训练位有闪彩（`shining_count > 0`）时触发词条 `add_effect_line(param[1], param[2])` |
-| `20` | 120 | `friendship >= param[2]` 时统计卡组各卡种数量，存在卡种按 `count.max(2)` 给对应副属性或 SP（`>=5` 走词条 `30`） |
+| `20` | 120 | `friendship >= param[2]` 时统计卡组各卡种数量，存在卡种按 `count.max(2)`（当前实现取至少 +2，待与卡面「最多 +2」核对）给对应副属性或 SP（`card_type >= 5` 走词条 `30`） |
 | `21` | 103 | 编成卡种数（distinct `card_type`，含自身）`>= param[1]` 时应用 `add_effect_line(param[2], param[3])`（`param[2]` 经脚本重排恒为 `8`） |
 
 ---
@@ -72,7 +72,7 @@
 | `22` | 121 | 支援卡羁绊上升量 +1，一起训练额外 +2 | 30207 秋川理事长 | ❌ 未实现 |
 | `23` | 122 | 点击时对同训练位支援卡施加下回合得意率提升（×160% 或 +60 存疑） | 30257 塔可布莱恩 | ❌ **归剧本侧**（跨回合且作用于他卡，通用层跳过） |
 
-## 4. 计算时机（无缓存）
+## 5. 计算时机（无缓存）
 
 - `calc_training_effect(game, train)` 每次按**当前羁绊**从面板重建，不读写 `SupportCard.effect`；
 - `SupportCard.effect` 仅保留为建局面板快照（legacy），运行期不要读取；`deyilv` 不再回写该字段；

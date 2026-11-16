@@ -10,7 +10,7 @@
 
 ## 项目指针与范围
 
-- **开发启动**：新剧本开工前先按 [docs/dev_plan.md](docs/dev_plan.md) 完成 S0 机制核对；强依赖具体剧本的形态不预置实现，待确认项记入 [docs/todo.md](docs/todo.md) 或 Issue。
+- **开发启动**：新剧本开工前先按 [docs/dev_plan.md](docs/dev_plan.md) 完成 S0 机制核对；待确认项记入 [docs/todo.md](docs/todo.md) 或 Issue。
 - **引擎边界**：引擎仓推荐以 git submodule（如 `umaai_next/`）挂载，**非必要不修改引擎源码**；引擎契约与接缝约束见 [ARCHITECTURE.md](ARCHITECTURE.md)，具体 trait 签名以引擎 crate 源码为准。
 - **架构与落点**：新增模块、调整 crate 依赖、定位代码或处理引擎接缝前，先读 [ARCHITECTURE.md](ARCHITECTURE.md)。
 - **文档与提交同步**：更新文档或进入提交准备前，先读 [docs/README.md](docs/README.md)。
@@ -24,10 +24,7 @@
 
 ## Agent skills
 
-- **Issue 追踪器**：读取、创建或更新 GitHub Issues 时，按 [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md) 执行。
-- **分诊标签**：为 Issue 添加或映射分诊标签时，使用 [docs/agents/triage-labels.md](docs/agents/triage-labels.md) 中的映射表。
-- **任务路线图**：规划单次会话无法容纳的超大型任务，在 Issue 追踪器上建立决策工单路线图时，按 [docs/agents/wayfinder.md](docs/agents/wayfinder.md) 执行。
-- **追问审视**：对计划、决策或想法进行多轮结构化追问与压力测试时，按 [docs/agents/grilling.md](docs/agents/grilling.md) 执行。
-- **一手调研**：基于一手资料开展后台调研并落盘引用结论时，按 [docs/agents/research.md](docs/agents/research.md) 执行。
-- **领域文档**：探索代码库、使用领域术语、评估或做出架构决策时，按 [docs/agents/domain.md](docs/agents/domain.md) 执行。
-- **会话交接**：上下文过长或需交接给下一位 Agent 时，按 [docs/agents/handoff.md](docs/agents/handoff.md) 执行。
+- **领域与 ADR**：探索代码库、核对领域术语或记录架构决策时，读 [docs/agents/domain.md](docs/agents/domain.md)。
+- **Issue、分诊与路线图**：操作 GitHub Issue、映射分诊标签或用 Wayfinder 拆解大型任务路线图时，读 [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md)、[docs/agents/triage-labels.md](docs/agents/triage-labels.md)、[docs/agents/wayfinder.md](docs/agents/wayfinder.md)。
+- **追问与一手调研**：执行多轮设计追问或后台一手资料调研时，读 [docs/agents/grilling.md](docs/agents/grilling.md)、[docs/agents/research.md](docs/agents/research.md)。
+- **会话交接**：上下文过长或需交接给下一位 Agent 时，读 [docs/agents/handoff.md](docs/agents/handoff.md)。
