@@ -1,16 +1,16 @@
 # 架构概览（ARCHITECTURE）
 
-本仓是 `<剧本名>` 的 Rust 五 crate workspace 模板，按 `path` 或 `git` 依赖引用引擎仓稳定面（`umaai-core` / `umasim` / `umaai`）。领域术语见 [GLOSSARY.md](GLOSSARY.md)，机制公式与落点见 [docs/mechanism.md](docs/mechanism.md)，通用引擎规范见 `<引擎仓>/docs/scenario/{repo_form,contracts}.md`。
+本仓是 `<剧本名>` 的 Rust 五 crate workspace 模板，按 `path` 或 `git` 依赖引用引擎稳定面（`umaai-core` / `umasim` / `umaai`）。领域术语见 [GLOSSARY.md](GLOSSARY.md)，机制公式与落点见 [docs/mechanism.md](docs/mechanism.md)。
 
 ## 1. Crate 拓扑与依赖边界
 
 ```text
 scenario-cli   ──▶ scenario-ai ──┐
-scenario-tools ──▶ scenario-sim ─┼─▶ scenario-core ──▶ <引擎仓> (umaai-core / umasim / umaai)
+scenario-tools ──▶ scenario-sim ─┼─▶ scenario-core ──▶ 引擎 crate (umaai-core / umasim / umaai)
 ```
 
 - **单向依赖，禁止反向依赖**：`scenario-core` 不得依赖任何业务 crate；`scenario-sim`（离线模拟）与 `scenario-ai`（在线决策）互不依赖且不得依赖 `scenario-cli`。
-- **不碰引擎仓**：接入与维护剧本时引擎仓 `git diff` 应为空；确需新能力时回引擎仓按「带默认实现、非破坏」加钩子。
+- **不碰引擎仓**：接入与维护剧本时引擎仓 `git diff` 应为空；确需新能力时回引擎按「带默认实现、非破坏」加钩子（准入判据：**跨剧本复用**且与具体剧本、算法无关）。
 - **按需加依赖**：重依赖各归其位（终端依赖只在 `scenario-cli`），对应业务真正用上之前不向 `Cargo.toml` 提前引入依赖或 feature。
 
 ## 2. 核心数据流
@@ -59,11 +59,15 @@ scenario-tools ──▶ scenario-sim ─┼─▶ scenario-core ──▶ <引�
 | 训练员决策逻辑 | `scenario-core/src/trainer.rs` |
 | 终端运行与手动核对面板 | `scenario-cli/src/{main.rs, manual.rs}` |
 
-## 5. 架构硬约束
+## 5. 架构硬约束与引擎契约速查
 
+> 具体 trait 签名与默认方法以引擎 crate（`umaai-core` / `umasim` / `umaai`）源码为准。
+
+- **`Game`（`umasim::game::Game`）22 必备分组**：关联类型（`Person` / `Action`）、回合（`turn` / `max_turn`）、规则流（`rule_master` / `set_rule_master`）、阶段（`stage` / `next` / `run_stage`）、决策面（`list_actions` / `generate_events` / `apply_event`）、人头（`persons` / `persons_mut` / `init_persons` / `deyilv`）、局面投影（`distribution` / `distribution_mut` / `absent_rate_drop` / `train_level` / `has_group_buff` / `uma` / `uma_mut` / `deck`）。`TrainingValueSource` 只实现 `training_basic_table()`。
 - **契约 trait impl 不可拆文件**：同一个 trait（如 `Game`）的 `impl` 必须整体落在同一文件（`traits.rs`）；可拆的只有 inherent `impl`。
-- **`Deref` 底座不得与契约同名**：`BaseGame` 的公开方法不得与 `Game` 契约方法同名。
-- **可见性分级**：crate 内跨模块调用标 `pub(crate)`；跨 crate 消费面标 `pub`（宿主稳定面 = `core` 的装配 / `ScenarioView` / 训练员）。
-- **数据与配置注入**：lib 侧不写死路径（`ScenarioData::load` / `ScenarioConfig::load*` / `Data::init` 的根由调用方注入）；bin 数据根为代码级常量（`scenario-cli/src/main.rs` 的 `DATA_ROOT`），工作目录存在同名 `ai_config.toml` / `scenario_config.toml` 时字段级覆盖合并；未知键严格报错。
-- **`StageId` 显式赋号**：对外投影枚举值只增不改，修改已有编号会导致旧种子失效。
-- **呈现与决策分离**：`ScenarioView` 为纯只读值快照，不混入呈现文本，不进契约 trait；`manual.rs` 与前端只消费 `ScenarioView` 与静态表。
+- **人头布局契约**：`persons[0..卡组长度]` 必须与 `deck` 逐槽同序（晚加入卡组人物开局建人头 + `person_is_available` 激活）；非卡人头只在尾部 `add_person` 追加。禁止写死 `person_index`，定位用 `person_index_of_type` / `person_index_of_card` / `deck_index_of`。
+- **`Deref` 底座不得与契约同名**：`BaseGame` 的公开方法不得与 `Game` 契约方法同名（如底座用 `init_rule_streams` 而非 `set_rule_master`）；`take_rule_streams` / `put_rule_streams` 须成对使用。
+- **`FlatSearchGame` 一致性**：`apply_root_action` 必须与 `run_stage` 内执行动作**逐字一致**；`fork_for_rollout` 是分支唯一入口（克隆 + 注入 rollout 种子 + 重置自持流）。
+- **`StageId` 显式赋号**：对外投影枚举值只增不改，修改已有编号会导致旧种子与基线失效。
+- **`ScenarioView`（形态 A 五条纪律）**：① 单一取数口（`game.view()`）② 只放引擎不知道的字段 ③ 值快照语义（owned、`Clone`、幂等无副作用）④ 可演进（`#[non_exhaustive]`）⑤ **不进契约 trait**。`manual.rs` 与前端只消费 `ScenarioView` 与静态表。
+- **可见性与数据注入**：crate 内跨模块标 `pub(crate)`，跨 crate 消费面标 `pub`；lib 侧不写死路径，bin 数据根为代码级常量 `DATA_ROOT`，工作目录存在同名 `ai_config.toml` / `scenario_config.toml` 时字段级覆盖合并，未知键严格报错。

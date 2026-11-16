@@ -10,8 +10,8 @@
 
 ## 项目指针与范围
 
-- **模板初始化**：复制本模板到独立剧本仓后，按 [README.md](README.md) 上手四步将 `scenario` 替换为剧本名；位于引擎仓内自检时，cargo 命令加 `--manifest-path templates/umaai-scenario/Cargo.toml`。
-- **引擎边界**：**不修改引擎源码**；不预置强依赖具体剧本的形态（待确认项先入 [docs/todo.md](docs/todo.md) 或 Issue）；引擎契约与接入规范见 `<引擎仓>/docs/scenario/{contracts,README,repo_form}.md`。
+- **开发启动**：新剧本开工前先按 [docs/dev_plan.md](docs/dev_plan.md) 完成 S0 机制核对；强依赖具体剧本的形态不预置实现，待确认项记入 [docs/todo.md](docs/todo.md) 或 Issue。
+- **引擎边界**：引擎仓推荐以 git submodule（如 `umaai_next/`）挂载，**非必要不修改引擎源码**；引擎契约与接缝约束见 [ARCHITECTURE.md](ARCHITECTURE.md)，具体 trait 签名以引擎 crate 源码为准。
 - **架构与落点**：新增模块、调整 crate 依赖、定位代码或处理引擎接缝前，先读 [ARCHITECTURE.md](ARCHITECTURE.md)。
 - **文档与提交同步**：更新文档或进入提交准备前，先读 [docs/README.md](docs/README.md)。
 

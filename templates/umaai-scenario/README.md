@@ -1,22 +1,24 @@
 # umaai-scenario（空剧本仓模板）
 
-`umaai-next` 引擎仓的剧本五 crate workspace 模板：复制本目录到独立剧本仓，将 `scenario` 统一替换为剧本名（如 `ramen`）后开工。通用规范与契约见引擎仓 `<引擎仓>/docs/scenario/{README,repo_form,dev_process,perf_plan,contracts}.md`。
+`umaai-next` 引擎的剧本五 crate workspace 模板：复制本目录到独立剧本仓，将 `scenario` 统一替换为剧本名（如 `ramen`）后即可独立开发。架构约束与引擎契约速查见 [`ARCHITECTURE.md`](ARCHITECTURE.md)，文档总路由见 [`docs/README.md`](docs/README.md)。
 
-## 1. 上手四步
+## 1. 初始化与上手四步
 
-1. **复制 + 改名**：复制整个目录到剧本仓，把 5 个 package 名与 bin 名里的 `scenario` 统一替换为剧本名（如 `ramen-core` / `ramen-cli` / bin `ramen`），同步改 `use scenario_core::…` 与 `Cargo.toml` 引用。保留根 `[workspace]` 表使剧本仓可独立构建。
-2. **改依赖路径**：开发期 `path` 指向引擎仓；稳定期换 git `tag`；下游宿主（Web / Android）加 `default-features = false`（见下「依赖三档」）。
-3. **补数据**：把引擎仓 `gamedata/` 的六张静态表（`cardDB.json` / `umaDB.json` / `events.json` / `text_data_dict.json` / `constants.json` / `manifest.json`）与 `ai_config.toml` 拷入本仓 `data/`；剧本仓自此自持数据、拷仓即跑。引擎数据升级时重拷并重录基线。
-4. **填留白**：`data.rs` / `config.rs` 换成自己的资产与配置段；`game/{stage,action,mod,traits}.rs` 换成自己的阶段、动作、结算与契约实现；`trainer.rs` 换成自己的手写 / 搜索训练员。强依赖剧本的形态**不在模板预置**，先在 [docs/todo.md](docs/todo.md) 或 Issue 列为待确认项，机制核对后再实现。
+1. **改名**：把 5 个 package 名与 bin 名里的 `scenario` 统一替换为剧本名（如 `ramen-core` / `ramen-cli` / bin `ramen`），同步改 `use scenario_core::…` 与 `Cargo.toml` 引用。保留根 `[workspace]` 表使剧本仓可独立构建。
+2. **改依赖路径**：推荐以 git submodule（如 `umaai_next/`）形式引用引擎仓，通过 `path = "umaai_next/crates/..."` 依赖；稳定期可钉 submodule 提交或换 git `tag`；下游宿主（Web / Android）加 `default-features = false`（见下「依赖三档」）。
+3. **补数据**：把引擎 `gamedata/` 的六张静态表（`cardDB.json` / `umaDB.json` / `events.json` / `text_data_dict.json` / `constants.json` / `manifest.json`）与 `ai_config.toml` 拷入本仓 `data/`；剧本仓自此自持数据、拷仓即跑。引擎数据升级时重拷并重录基线。
+4. **填留白**：按 [`docs/dev_plan.md`](docs/dev_plan.md) 推进：先完成 S0 机制核对（结论落 [`docs/mechanism.md`](docs/mechanism.md) 与 [`GLOSSARY.md`](GLOSSARY.md)），再把 `data.rs` / `config.rs`、`game/{stage,action,mod,traits}.rs` 与 `trainer.rs` 替换为本剧本实现。初始化完成后可清理本节模板说明，更新为本剧本简介。
+
+> 提示：在引擎仓内自检本模板时，cargo 命令需加 `--manifest-path templates/umaai-scenario/Cargo.toml`；复制出仓后直接在剧本仓根执行 `cargo`。
 
 ## 2. 依赖三档
 
 ```toml
-# 1. 开发期：并列目录（引擎仓与剧本仓并列）
-umaai-core = { path = "../umaai-next/crates/umaai-core" }
-umasim     = { path = "../umaai-next/crates/umasim" }
-umaai      = { path = "../umaai-next/crates/umaai" }
-umaai-cli  = { path = "../umaai-next/crates/umaai-cli" }   # 仅终端入口需要（样例面）
+# 1. 推荐：git submodule（如将引擎仓挂载在仓根 umaai_next/；若用并列目录则改为 ../umaai-next/crates/...）
+umaai-core = { path = "umaai_next/crates/umaai-core" }
+umasim     = { path = "umaai_next/crates/umasim" }
+umaai      = { path = "umaai_next/crates/umaai" }
+umaai-cli  = { path = "umaai_next/crates/umaai-cli" }   # 仅终端入口需要（样例面）
 
 # 2. 稳定期：同一 repo、同一 tag（cargo 只解析一份检出）
 # umaai = { git = "<engine repo>", tag = "engine-v0.1.0" }
@@ -38,8 +40,8 @@ cargo clippy --workspace --all-targets --offline -- -D warnings
 cargo test --workspace --release --offline
 ```
 
-- `cargo check` / `clippy` / `test` 通过（**不改引擎任何一行**）；
-- 接入新剧本时引擎仓 `git diff` 为空——确需新能力时回引擎仓按「带默认实现、非破坏」加钩子；
+- `cargo check` / `clippy` / `test` 通过（**不修改引擎源码**）；
+- 确需引擎新能力时，按 [`ARCHITECTURE.md`](ARCHITECTURE.md) 准入原则回引擎按「带默认实现、非破坏」加钩子；
 - 三条随机轴（局面 / 事件 / 策略）+ 决策流只喂 `Trainer`；阶段自持、对外只投影 `StageId`；同一 `master` 下两次运行 / 两支分支逐位一致；
 - 剧本资源给前端走 `ScenarioView`，不进契约 trait。
 
@@ -47,6 +49,6 @@ cargo test --workspace --release --offline
 
 | 文档 | 用途 |
 |---|---|
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Crate 拓扑、模块落点与架构约束 |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Crate 拓扑、模块落点、架构约束与引擎契约速查 |
 | [`GLOSSARY.md`](GLOSSARY.md) | 领域术语与禁用别名 |
-| [`docs/README.md`](docs/README.md) | 剧本机制、ADR、Agent 规范、测试与交接文档索引 |
+| [`docs/README.md`](docs/README.md) | 剧本开发计划、机制、ADR、Agent 规范、测试与交接文档索引 |
