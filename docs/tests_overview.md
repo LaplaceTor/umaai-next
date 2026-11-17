@@ -125,7 +125,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 
 ---
 
-## umaai-core (77)
+## umaai-core (78)
 
 本 crate 共 71 条测试，分两类：65 条内联单元测试（按源码文件分布，逐条 `assert` 判定随机流、DTO 与纯函数口径）；6 条集成测试（载入真实 `gamedata/`，逐条 `print` 观测后经 `Checker` 聚合，有失败才返回 `Err`）。
 关注点：随机派生与可复现性、数据 schema 与语义校验、位段与统计原语的边界口径。
@@ -235,7 +235,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 - `test_window` — 窗口边界内外：越界置位报错、越界查询为否
 - `test_serde_transparent` — 对外序列化为裸位段，反序列化还原
 
-### `src/rng.rs` (10)
+### `src/rng.rs` (11)
 
 **确定性与无状态性**
 - `test_deterministic` — 同种子两次构造序列逐位一致
@@ -243,6 +243,7 @@ cargo test -p umaai-tests --release --test session_basic -- --nocapture    # 单
 - `test_counter_continues` — 第几次取值只与序号有关，与消费路径无关
 - `test_clone_independent` — 克隆后各自推进，计数互不影响
 - `test_additive_no_xor_collision` — 加法派生不出现异或派生的序号错位撞车
+- `test_derive_seed_no_collision` — 派生顺序敏感、零分量不消去、相邻局在相邻回合流上不撞车
 
 **流派生与隔离**
 - `test_stream_tags_isolated` — 不同流标记派生出的序列不重叠
