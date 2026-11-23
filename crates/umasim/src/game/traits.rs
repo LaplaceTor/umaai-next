@@ -28,6 +28,36 @@ use crate::game::{CardTrainingEffect, StageId, SupportCard, Uma};
 /// [`Game::default_calc_training_value`]）。
 pub type TrainingBasicTable = Vec<Vec<[i32; 7]>>;
 
+/// 把一个随机字映射到权重表的分桶（无拒绝重抽、纯函数）
+///
+/// 与 [`sample_bucket`] 的区别：不构造 `Uniform`、不做拒绝采样，因此「同一个字」
+/// 在任何调用点都映射到同一个桶——这是跨分支落位对齐的基础。
+/// 全部权重为 0（没有可行桶）时返回 `None`。
+pub fn bucket_of(word: u64, weights: &[i32]) -> Option<usize> {
+    let total: i64 = weights.iter().map(|w| i64::from(*w)).sum();
+    if total <= 0 {
+        return None;
+    }
+    // Lemire 乘取高位：一次乘法定档，偏差 < total / 2^64，对权重表可忽略
+    let pick = ((u128::from(word) * total as u128) >> 64) as i64;
+    let mut acc = 0i64;
+    for (index, weight) in weights.iter().enumerate() {
+        acc += i64::from(*weight);
+        if pick < acc {
+            return Some(index);
+        }
+    }
+    weights.len().checked_sub(1)
+}
+
+/// 恰好消费 1 个随机字的加权采样（无拒绝重抽）
+///
+/// 恒定消费 1 个字；全部桶权重为 0 时返回 `None`（仍消费 1 个字）。
+pub fn sample_bucket_once(weights: &[i32], rng: &mut impl Rng) -> Option<usize> {
+    let word = rng.next_u64();
+    bucket_of(word, weights)
+}
+
 /// 训练基础值表来源（剧本钩子）
 ///
 /// 「无剧本」基础局由 [`crate::game::base`] 的 `BasicGame` 提供内置默认表；
@@ -280,39 +310,49 @@ pub trait Game: Clone + TrainingValueSource {
             return Ok(-1);
         }
         // 已判定出现，按训练位权重（含得意率）随机分配
-        let mut weights = [100, 100, 100, 100, 100];
+        let mut weights = [100i32; 5];
         if train_type <= 4 {
             weights[train_type] += self.deyilv(person_index) as i32;
         }
+        // 只从**可行槽**采样：已满 5 人 / 已有本人 / 同槽已有友人 的槽权重置 0。
+        // 每人恒定消费 1 个字（不再“接受即停”也不重抽），消费量与占位无关——
+        // 这正是公共随机数配对的前提；也不会因为“手气差”让有空位的人头凭空消失。
+        // 先按固定权重映射一次（不受板影响，跨分支同一个字给出同一个「意向槽」），
+        // 意向槽恰好不可行时才用**同一个字**回退到可行集映射。这样既保持
+        // 「锁位不挤走其他人头的落位」，也不会因为手气差让有空位的人头消失。
+        // 可行表只在回退分支构造：常规路径只检查一个槽，省掉逐槽扫描。
         let d = self.distribution();
-        let mut ok = false;
-        let mut retries = 0;
-        let mut train = 0;
-        while !ok && retries < 10 {
-            train = sample_bucket(&weights, rng)?;
-            retries += 1;
-            // 不能多于5人或出现同样人头
-            if d[train].len() >= 5 || d[train].contains(&person_index) {
-                continue;
+        let blocked = |train: usize| {
+            let row = &d[train];
+            row.len() >= 5
+                || row.contains(&person_index)
+                || (is_friend
+                    && row.iter().any(|index| {
+                        usize::try_from(*index)
+                            .ok()
+                            .and_then(|i| self.persons().get(i))
+                            .is_some_and(|person| person.is_friend())
+                    }))
+        };
+        let word = rng.next_u64();
+        let intended = bucket_of(word, &weights).unwrap_or(0);
+        let chosen = if blocked(intended) {
+            let mut feasible = weights;
+            for (train, weight) in feasible.iter_mut().enumerate() {
+                if blocked(train) {
+                    *weight = 0;
+                }
             }
-            // 每个训练只能出现一个友人
-            if is_friend
-                && d[train].iter().any(|index| {
-                    usize::try_from(*index)
-                        .ok()
-                        .and_then(|i| self.persons().get(i))
-                        .is_some_and(|person| person.is_friend())
-                })
-            {
-                continue;
-            }
-            ok = true;
-        }
-        if !ok {
-            Ok(-1)
+            bucket_of(word, &feasible)
         } else {
-            self.distribution_mut()[train].push(person_index);
-            Ok(train as i32)
+            Some(intended)
+        };
+        match chosen {
+            Some(train) => {
+                self.distribution_mut()[train].push(person_index);
+                Ok(train as i32)
+            }
+            None => Ok(-1),
         }
     }
     /// 重新分配所有人头（按人头类型顺序）

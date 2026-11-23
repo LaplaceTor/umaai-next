@@ -19,6 +19,7 @@ use umaai_core::testing::data_root;
 use umaai_tests::Checker;
 use umaai_tests::testing::{RACE_GRADES, RaceFirstTrainer, basic_newgame};
 use umasim::game::base::basic::{BasicAction, BasicGame};
+use umasim::game::base::{BaseAction, BasicStage};
 use umasim::game::{Game, InheritInfo, Trainer};
 use umasim::search::FlatSearchGame;
 
@@ -117,6 +118,68 @@ fn rule_streams_survive_decision_draws() -> Result<()> {
         "五维与 PT 逐位一致",
     );
     c.check(clean.base == noisy.base, "整个局面底座逐位一致（含两条规则流状态）");
+    c.finish()
+}
+
+#[test]
+fn root_action_uses_strategy_stream() -> Result<()> {
+    Data::init(data_root()?)?;
+    let mut c = Checker::new("搜索根动作：普通休息与实战共用策略流");
+    let mut root = basic_newgame()?;
+    root.stage = BasicStage::Train;
+    root.uma.vital = 0;
+    let sleep = BasicAction(BaseAction::Sleep);
+    let mut recoveries = std::collections::BTreeSet::new();
+    for seed in 0..8 {
+        let mut initial = root.fork_for_rollout(seed);
+        let mut strategy = initial.strategy.expect("fork 应初始化策略流");
+        strategy.next_u64(); // 从非零游标开始，防止根动作误重播种
+        initial.strategy = Some(strategy);
+        let mut reference = initial.clone();
+        reference.apply_action(&sleep, &mut strategy)?;
+        reference.strategy = Some(strategy);
+        recoveries.insert(reference.uma.vital);
+        c.check(strategy.counter() > 1, "普通休息确实抽取策略流");
+
+        let mut live = initial.clone();
+        live.run_stage(&RaceFirstTrainer, &mut StdRng::seed_from_u64(42))?;
+        c.check(live == reference, "正常阶段与显式策略流结算一致");
+        for skip in [0, EXTRA_DRAWS] {
+            let mut branch = initial.clone();
+            let mut decision = StdRng::seed_from_u64(42);
+            for _ in 0..skip {
+                decision.next_u64();
+            }
+            let mut untouched = decision.clone();
+            branch.apply_root_action(&sleep, &mut decision)?;
+            c.check(branch == reference, "根动作局面与策略游标均匹配参考局");
+            c.check(decision.next_u64() == untouched.next_u64(), "根动作未消费决策流");
+        }
+    }
+    c.check(recoveries.len() > 1, "不同规则种子覆盖多种休息回复档");
+    c.finish()
+}
+
+#[test]
+fn root_action_errors_preserve_streams() -> Result<()> {
+    Data::init(data_root()?)?;
+    let mut c = Checker::new("搜索根动作：报错不丢流、不回退到决策流");
+    let mut game = basic_newgame()?;
+    let mut decision = StdRng::seed_from_u64(42);
+    let mut untouched = decision.clone();
+    let strategy = game.strategy;
+    let invalid = BasicAction(BaseAction::Train(5));
+    c.check(game.apply_root_action(&invalid, &mut decision).is_err(), "拒绝越界训练");
+    c.check(game.strategy == strategy, "前置校验报错后保留原策略游标");
+    game.strategy = None;
+    let before = game.clone();
+    let sleep = BasicAction(BaseAction::Sleep);
+    c.check(
+        game.apply_root_action(&sleep, &mut decision).is_err(),
+        "缺少策略流即报错",
+    );
+    c.check(game == before, "缺流时不修改局面");
+    c.check(decision.next_u64() == untouched.next_u64(), "错误路径不消费决策流");
     c.finish()
 }
 

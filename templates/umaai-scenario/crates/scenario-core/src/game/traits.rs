@@ -169,9 +169,13 @@ impl FlatSearchGame for ScenarioGame {
         RandomTrainer
     }
 
-    fn apply_root_action(&mut self, action: &Self::Action, rng: &mut StdRng) -> Result<()> {
-        // 必须与 `run_stage` 内执行动作的方式逐字一致，否则被评估的动作会用上另一条流
-        self.apply_action(action, rng)
+    fn apply_root_action(&mut self, action: &Self::Action, _decision: &mut StdRng) -> Result<()> {
+        let mut strategy = self
+            .strategy
+            .ok_or_else(|| anyhow!("策略流缺失：应先调用 set_rule_master"))?;
+        let result = self.apply_action(action, &mut strategy);
+        self.strategy = Some(strategy);
+        result
     }
 
     fn fork_for_rollout(&self, rollout_seed: u64) -> Self {
@@ -179,5 +183,52 @@ impl FlatSearchGame for ScenarioGame {
         let mut game = self.clone();
         game.set_rule_master(rollout_seed);
         game
+    }
+}
+
+#[cfg(test)]
+mod root_rng_tests {
+    use rand::{RngCore, SeedableRng};
+
+    use super::*;
+    use crate::{ScenarioConfig, ScenarioData, ScenarioTrainer, testing};
+
+    #[test]
+    fn deterministic_root_actions_require_strategy_but_do_not_draw() -> Result<()> {
+        let mut root = ScenarioGame {
+            base: Default::default(),
+            persons: vec![],
+            stage: Stage::Train,
+            strategy: None,
+            data: ScenarioData::load(testing::data_dir())?.into(),
+        };
+        root.uma.max_vital = 100;
+        root.uma.vital = 50;
+        let trainer = ScenarioTrainer::new(ScenarioConfig { sample_order: vec![0] });
+        let mut decision = StdRng::seed_from_u64(7);
+        let untouched = decision.clone();
+        for action in [Action::Train(0), Action::Rest] {
+            let mut missing = root.clone();
+            let err = missing.apply_root_action(&action, &mut decision).unwrap_err();
+            assert!(err.to_string().contains("set_rule_master"));
+            assert_eq!(missing, root);
+
+            let mut branch = root.fork_for_rollout(42);
+            branch.strategy.as_mut().unwrap().next_u64();
+            let before = branch.strategy;
+            let mut live = branch.clone();
+            branch.apply_root_action(&action, &mut decision)?;
+            match action {
+                Action::Train(_) => {
+                    live.run_stage(&trainer, &mut decision)?;
+                    assert_eq!(branch, live);
+                    assert_eq!(branch.train_level_count[0], 1);
+                }
+                Action::Rest => assert_eq!(branch.uma.vital, 70),
+            }
+            assert_eq!(branch.strategy, before);
+            assert_eq!(decision, untouched);
+        }
+        Ok(())
     }
 }

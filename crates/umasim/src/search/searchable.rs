@@ -9,7 +9,7 @@
 //! [`FlatSearchGame::fork_for_rollout`] 若被漏掉，每次 rollout 会各摸一次 OS 随机数，
 //! 可复现性与 CRN 一起失效，且不会有任何报错。
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use rand::rngs::StdRng;
 
 use crate::game::base::basic::BasicGame;
@@ -102,9 +102,13 @@ impl FlatSearchGame for BasicGame {
         RandomTrainer
     }
 
-    /// 基础局无策略流分支，根动作即通用 `apply_action`
-    fn apply_root_action(&mut self, action: &Self::Action, rng: &mut StdRng) -> Result<()> {
-        self.apply_action(action, rng)
+    fn apply_root_action(&mut self, action: &Self::Action, _decision: &mut StdRng) -> Result<()> {
+        let mut strategy = self
+            .strategy
+            .ok_or_else(|| anyhow!("策略流缺失：应先调用 set_rule_master"))?;
+        let result = self.apply_action(action, &mut strategy);
+        self.strategy = Some(strategy);
+        result
     }
 
     /// 分支 = 克隆局面 + **注入 `master = rollout 种子`**
