@@ -21,8 +21,12 @@ use crate::frontend::{ErrorEvent, ErrorKind, Frontend, GameStart, RunStart, Stag
 pub struct Summary {
     /// 终局评分（`Uma::calc_score`）
     pub score: i32,
-    /// 终局 PT
+    /// 终局 PT（含 Hint 折算，评分口径）
     pub pt: i32,
+    /// 终局剩余技能点（不折算 Hint）
+    pub skill_pt: i32,
+    /// 终局总 Hint 等级
+    pub total_hints: i32,
     /// 评分档次名（查静态数据的分界表）
     pub rank: String,
     /// 终局五维
@@ -154,6 +158,7 @@ impl<'a> Runner<'a> {
             motivation: uma.motivation,
             five_status: uma.five_status,
             pt: uma.total_pt()?,
+            skill_pt: uma.skill_pt,
             total_hints: uma.total_hints,
         })
     }
@@ -165,6 +170,8 @@ impl<'a> Runner<'a> {
         Ok(Summary {
             score,
             pt: uma.total_pt()?,
+            skill_pt: uma.skill_pt,
+            total_hints: uma.total_hints,
             rank: Data::get()?.consts.get_rank_name(score).to_string(),
             five_status: uma.five_status,
             turn: game.turn(),

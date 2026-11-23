@@ -191,8 +191,8 @@ impl Uma {
             five_status: data.five_status_initial,
             five_status_bonus: data.five_status_bonus,
             five_status_limit: limit_base,
-            skill_score: 510, // 固有按5星计算
-            total_hints: 21,  // 按全部初始技能3级打折计算
+            skill_score: 0,  // 固有技能分不再写死：2026-11-23 真机 skillplan 对账显示 510 为重复项
+            total_hints: 21, // 按全部初始技能3级打折计算
             career_races: data.zip_races()?,
             free_races,
             ..Default::default()

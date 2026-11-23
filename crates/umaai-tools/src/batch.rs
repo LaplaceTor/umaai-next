@@ -156,6 +156,8 @@ mod tests {
             summary: Summary {
                 score,
                 pt,
+                skill_pt: pt,
+                total_hints: 0,
                 rank: String::new(),
                 five_status: [0; 5],
                 turn: 0,

@@ -373,6 +373,8 @@ fn end_summary(out: &FinalFrameOutcome, frames: usize, decisions: usize) -> Summ
     Summary {
         score: out.score.unwrap_or(0),
         pt: out.frame.skill_pt,
+        skill_pt: out.frame.skill_pt,
+        total_hints: out.frame.total_hints,
         rank: out.rank.clone().unwrap_or_default(),
         five_status: out.frame.five_status,
         turn: out.frame.turn,

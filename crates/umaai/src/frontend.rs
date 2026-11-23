@@ -66,8 +66,10 @@ pub struct UmaStatus {
     pub motivation: i32,
     /// 五维 `[速, 耐, 力, 根, 智]`
     pub five_status: [i32; 5],
-    /// 当前总 PT（技能点 + Hint 折算）
+    /// 当前总 PT（技能点 + Hint 折算；评分口径）
     pub pt: i32,
+    /// 当前剩余技能点（不折算 Hint）
+    pub skill_pt: i32,
     /// 累计 Hint 等级
     pub total_hints: i32,
 }

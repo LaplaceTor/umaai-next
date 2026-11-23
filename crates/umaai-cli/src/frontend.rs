@@ -111,7 +111,7 @@ impl<W: Write> PrintFrontend<W> {
         }
     }
 
-    /// 回合行：`T0   体 100/100 干劲 普通 速 12 耐 10 … PT 0`
+    /// 回合行：`T0   体 100/100 干劲 普通 速 12 耐 10 … 技能点 0 Hint 0`
     fn turn_line(&self, status: &UmaStatus) -> String {
         format!("T{:<3} {}", status.turn, self.status_brief(status))
     }
@@ -121,7 +121,7 @@ impl<W: Write> PrintFrontend<W> {
         format!("T{:<3} {:<8} {}", status.turn, status.stage, self.status_brief(status))
     }
 
-    /// 局面摘要（体力 / 干劲 / 五维 / PT），回合行与阶段行共用
+    /// 局面摘要（体力 / 干劲 / 五维 / 技能点 / Hint），回合行与阶段行共用
     fn status_brief(&self, status: &UmaStatus) -> String {
         let vital = self.styler.paint(
             vital_tone(status.vital, status.max_vital),
@@ -130,8 +130,9 @@ impl<W: Write> PrintFrontend<W> {
         let mot_name = explain::motivation(self.consts, status.motivation);
         let motivation = self.styler.paint(motivation_tone(status.motivation), mot_name);
         let five = explain::five_status(self.consts, &status.five_status);
-        let pt = self.styler.paint(Tone::Accent, &status.pt.to_string());
-        format!("体 {vital} 干劲 {motivation} {five} PT {pt}")
+        let skill_pt = self.styler.paint(Tone::Accent, &status.skill_pt.to_string());
+        let hints = self.styler.paint(Tone::Accent, &status.total_hints.to_string());
+        format!("体 {vital} 干劲 {motivation} {five} 技能点 {skill_pt} Hint {hints}")
     }
 
     /// 决策行（`Verbose` 档）：`→ [train] 训练：耐力（候选 5）`
@@ -153,7 +154,11 @@ impl<W: Write> PrintFrontend<W> {
     fn final_block(&self, sum: &Summary) -> String {
         let rows = vec![
             ("评分".to_string(), self.ranked_score(sum)),
-            ("PT".to_string(), self.styler.paint(Tone::Accent, &sum.pt.to_string())),
+            (
+                "技能点".to_string(),
+                self.styler.paint(Tone::Accent, &sum.skill_pt.to_string()),
+            ),
+            ("Hint".to_string(), sum.total_hints.to_string()),
             ("回合".to_string(), format!("{}/{}", sum.turn, self.max_turn)),
             ("阶段".to_string(), sum.stages.to_string()),
             ("决策".to_string(), sum.decisions.to_string()),
@@ -254,6 +259,7 @@ mod tests {
             motivation: 3,
             five_status: [12, 10, 10, 10, 10],
             pt: 0,
+            skill_pt: 0,
             total_hints: 0,
         }
     }
@@ -333,6 +339,8 @@ mod tests {
         fe.on_run_end(&Summary {
             score: 12345,
             pt: 350,
+            skill_pt: 300,
+            total_hints: 50,
             rank: "A+".into(),
             five_status: [900, 800, 700, 600, 500],
             turn: 77,
@@ -344,5 +352,9 @@ mod tests {
         assert!(out.contains("A+"));
         assert!(out.contains("速"), "五维表应带轴名");
         assert!(out.contains("900"));
+        assert!(out.contains("技能点"), "终局块应显示不折算的剩余技能点: {out}");
+        assert!(out.contains("300"), "剩余技能点值: {out}");
+        assert!(out.contains("Hint"), "终局块应单列 Hint 等级: {out}");
+        assert!(out.contains("50"), "Hint 等级值: {out}");
     }
 }
