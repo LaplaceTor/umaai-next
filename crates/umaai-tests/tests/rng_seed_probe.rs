@@ -98,24 +98,23 @@ fn rng_seed_probe_production_paths_and_formulae() -> Result<()> {
     );
 
     assert_eq!(
-        observed_turn_fixed, current_turn_fixed,
-        "生产 TurnFixed 当前公式应为 derive_seed(master, [turn])"
+        observed_turn_fixed, tagged_turn_fixed,
+        "生产 TurnFixed 现在应为 derive_seed(master, [turn, TURN_FIXED_TAG])"
     );
     assert_eq!(
         observed_event, current_event,
         "生产 Event 当前公式应为 derive_seed(master, [turn, EVENT_TAG])"
     );
     assert_ne!(
-        observed_turn_fixed, tagged_turn_fixed,
-        "显式 TURN_FIXED_TAG 迁移候选应改变 TurnFixed 样本"
+        observed_turn_fixed, current_turn_fixed,
+        "带标签后必须与旧的裸回合派生区分开（迁移即改值）"
     );
     assert_ne!(
         observed_turn_fixed, historical_turn_fixed,
         "当前生产值与历史 XOR 对照应可区分"
     );
 
-    // 回合迁移范围样本：生产 reset_rule_streams 对每个回合都只吃 [turn]，
-    // 显式标签候选会逐回合改变 TurnFixed master。
+    // 回合迁移范围样本：确认「裸回合」与「回合 + 标签」在每个回合都不同值。
     for sampled_turn in [0u64, 1, 10, 77] {
         let current = derive_seed(master, &[sampled_turn]);
         let tagged = derive_seed(master, &[sampled_turn, TURN_FIXED_TAG]);
@@ -152,7 +151,10 @@ fn rng_seed_probe_production_paths_and_formulae() -> Result<()> {
         hex(fork_turn_fixed),
         hex(fork_event)
     );
-    assert_eq!(fork_turn_fixed, derive_seed(rollout_seed, &[turn]));
+    assert_eq!(
+        fork_turn_fixed,
+        derive_seed(rollout_seed, &[turn, TURN_FIXED_TAG])
+    );
     assert_eq!(fork_event, derive_seed(rollout_seed, &[turn, EVENT_TAG]));
 
     let mut reset_game = game.clone();
@@ -247,35 +249,37 @@ fn rng_seed_probe_decision_tag_and_crn_samples() -> Result<()> {
     assert_ne!(derive_seed(9, &[1, 2]), derive_seed(9, &[2, 1]));
     assert_ne!(derive_seed(42, &[7]), derive_seed(42, &[7, 0]));
 
-    // 多 master/turn 实跑：显式 TurnFixed 标签与历史 XOR 均改变真实分配。
-    let mut tagged_changes = 0usize;
+    // 多 master/turn 实跑：迁移前的「裸回合」口径与历史 XOR 都会改变真实分配。
+    let mut bare_changes = 0usize;
     let mut legacy_changes = 0usize;
     for master in [0u64, 42, 43, 0x0123_4567_89ab_cdef] {
         for turn in [0i32, 1, 2, 10] {
             let (current, current_event, current_strategy) = distribution_for(master, turn, None)?;
-            let tagged_master = derive_seed(master, &[turn as u64, TURN_FIXED_TAG]);
+            let bare_master = derive_seed(master, &[turn as u64]);
             let legacy_master = historical_xor(master, &[turn as u64]);
-            let (tagged, tagged_event, tagged_strategy) = distribution_for(master, turn, Some(tagged_master))?;
-            let (legacy, legacy_event, legacy_strategy) = distribution_for(master, turn, Some(legacy_master))?;
-            assert_eq!(tagged_event, current_event, "tagged TurnFixed 候选不得改变事件流");
-            assert_eq!(tagged_strategy, current_strategy, "tagged TurnFixed 候选不得改变策略流");
+            let (bare, bare_event, bare_strategy) = distribution_for(master, turn, Some(bare_master))?;
+            let (legacy, legacy_event, legacy_strategy) =
+                distribution_for(master, turn, Some(legacy_master))?;
+            assert_eq!(bare_event, current_event, "bare TurnFixed 候选不得改变事件流");
+            assert_eq!(bare_strategy, current_strategy, "bare TurnFixed 候选不得改变策略流");
             assert_eq!(legacy_event, current_event, "legacy TurnFixed 候选不得改变事件流");
             assert_eq!(legacy_strategy, current_strategy, "legacy TurnFixed 候选不得改变策略流");
-            let tagged_changed = current != tagged;
+            // 生产现在已带标签，所以「Bare」就是迁移前的旧口径
+            let bare_changed = current != bare;
             let legacy_changed = current != legacy;
-            tagged_changes += usize::from(tagged_changed);
+            bare_changes += usize::from(bare_changed);
             legacy_changes += usize::from(legacy_changed);
             println!(
-                "distribution master={} turn={} tagged_changed={} legacy_changed={}",
-                master, turn, tagged_changed, legacy_changed
+                "distribution master={} turn={} bare_changed={} legacy_changed={}",
+                master, turn, bare_changed, legacy_changed
             );
         }
     }
     println!(
-        "distribution change counts tagged={} legacy={} samples=16",
-        tagged_changes, legacy_changes
+        "distribution change counts bare={} legacy={} samples=16",
+        bare_changes, legacy_changes
     );
-    assert!(tagged_changes > 0, "显式标签候选至少应改变一个真实分配样本");
+    assert!(bare_changes > 0, "迁移前的裸回合口径至少应改变一个真实分配样本");
     assert!(legacy_changes > 0, "历史 XOR 至少应改变一个真实分配样本");
 
     // 明确反例：历史 XOR 模型会把 (base, part) 与 (base^k, part^k) 合并。

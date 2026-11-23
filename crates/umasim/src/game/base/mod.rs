@@ -16,7 +16,7 @@ use hashbrown::{HashMap, HashSet};
 use rand::Rng;
 use rand::seq::IndexedRandom;
 use umaai_core::gamedata::{ActionValue, ChoiceResult, EventChoice, EventData, ExtraStatus, TriggerType};
-use umaai_core::rng::{EventRng, StreamTag, TurnFixedRng, derive_seed};
+use umaai_core::rng::{EventRng, StreamTag, TurnFixedRng};
 use umaai_core::{Array5, AttributeArray, Data, diag, split_status};
 
 pub use action::*;
@@ -104,15 +104,16 @@ impl BaseGame {
 
     /// 按 `(master, turn)` 重新派生两条规则流（回合边界调用）
     ///
-    /// 派生形如 `derive_seed(master, [turn])` / `derive_seed(master, [turn, EVENT_TAG])`：
+    /// 两条流各经 `StreamTag::derive(master, turn)` 派生，各带自己的非零标签——
+    /// 既不会互相等价，也不与「裸回合」派生撞在一起。
     /// 同一种子、同一回合，**任何策略**看到的局面与事件随机逐位相同——这既是 CRN 配对
     /// 的基础，也让"改上游随机"不再位移本回合的其他随机点。未注入主种子时清空两条流。
     pub fn reset_rule_streams(&mut self) {
         match self.rule_master {
             Some(master) => {
                 let turn = self.turn as u64;
-                self.turn_fixed = Some(TurnFixedRng::new(derive_seed(master, &[turn])));
-                self.event = Some(EventRng::new(derive_seed(master, &[turn, StreamTag::Event.tag()])));
+                self.turn_fixed = Some(TurnFixedRng::new(StreamTag::TurnFixed.derive(master, turn)));
+                self.event = Some(EventRng::new(StreamTag::Event.derive(master, turn)));
             }
             None => {
                 self.turn_fixed = None;

@@ -16,7 +16,7 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use umaai_core::Data;
 use umaai_core::gamedata::EventData;
-use umaai_core::rng::{EventRng, StreamTag, derive_seed};
+use umaai_core::rng::{EventRng, StreamTag};
 use umasim::game::base::BaseGame;
 use umasim::game::{Game, Trainer};
 
@@ -268,7 +268,7 @@ impl<'a, G: Game, T: Trainer<G>> Session<'a, G, T> {
         let master = game
             .rule_master()
             .ok_or_else(|| anyhow!("规则主种子未注入：会话在重建局面后应先注入 master"))?;
-        let mut event_rng = EventRng::new(derive_seed(master, &[game.turn() as u64, StreamTag::Event.tag()]));
+        let mut event_rng = EventRng::new(StreamTag::Event.derive(master, game.turn() as u64));
         let mut multi = false;
         for ev in events {
             if ev.player_select && ev.choices.len() > 1 {

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use umaai::Config;
 use umaai_core::Data;
 use umaai_core::gamedata::ActionValue;
-use umaai_core::rng::{StrategyRng, StreamTag, derive_seed};
+use umaai_core::rng::{StrategyRng, StreamTag};
 use umasim::game::base::{BaseGame, BasePerson, RuleStreams};
 use umasim::game::{Game, InheritInfo, Trainer, TrainingValueSource};
 
@@ -139,7 +139,7 @@ impl ScenarioGame {
         self.strategy = self
             .base
             .master()
-            .map(|master| StrategyRng::new(derive_seed(master, &[turn, StreamTag::Strategy.tag()])));
+            .map(|master| StrategyRng::new(StreamTag::Strategy.derive(master, turn)));
     }
 
     /// 单阶段推进（模板版阶段机；真实剧本按自己的回合结构改）

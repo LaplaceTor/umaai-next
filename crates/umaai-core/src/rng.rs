@@ -84,7 +84,7 @@ pub enum StreamTag {
 }
 
 impl StreamTag {
-    /// 流标记数值（参与种子派生异或，冻结不可改）
+    /// 流标记数值（参与种子派生，冻结不可改）
     pub const fn tag(self) -> u64 {
         match self {
             Self::TurnFixed => TURN_FIXED_TAG,
@@ -92,6 +92,15 @@ impl StreamTag {
             Self::Event => EVENT_TAG,
             Self::Probe => PROBE_TAG,
         }
+    }
+
+    /// 本回合该流的派生：形状固定为 `derive_seed(master, [turn, tag])`
+    ///
+    /// 规则流的唯一入口。分量顺序与标签在此固化，调用方不再手写数组——
+    /// 「写反顺序」「漏带标签」这两类静默错误因此不可表达。
+    #[must_use]
+    pub fn derive(self, master: u64, turn: u64) -> u64 {
+        derive_seed(master, &[turn, self.tag()])
     }
 }
 

@@ -13,7 +13,7 @@ use rand::Rng;
 use rand::rngs::StdRng;
 use rand::seq::IndexedRandom;
 use umaai_core::gamedata::EventData;
-use umaai_core::rng::{StrategyRng, StreamTag, derive_seed};
+use umaai_core::rng::{StrategyRng, StreamTag};
 use umaai_core::{AttributeArray, Data, Ill};
 
 use crate::game::base::{BaseAction, BaseGame, BasePerson, BasicStage, RuleStreams};
@@ -266,7 +266,7 @@ impl BasicGame {
         self.strategy = self
             .base
             .master()
-            .map(|master| StrategyRng::new(derive_seed(master, &[turn, StreamTag::Strategy.tag()])));
+            .map(|master| StrategyRng::new(StreamTag::Strategy.derive(master, turn)));
     }
 
     /// 友人的人头下标（按友人卡的 `card_id` 反查）
