@@ -73,6 +73,11 @@ pub struct SupportCardData {
     pub card_type: i32,
     /// 各档数值
     pub card_value: Vec<CardValue>,
+    /// 灵感技能池数量（该卡在 `single_mode_hint_gain` 中可出的技能数；`None` = 无数据）
+    ///
+    /// 用于每卡 hint 上限（5 × 该值）；旧 cardDB 缺该字段时按无数据处理。
+    #[serde(default, rename = "skillCount")]
+    pub skill_count: Option<u32>,
     /// 固有类型
     #[serde(default)]
     pub unique_effect_type: u32,
@@ -108,11 +113,23 @@ mod tests {
             rarity: 3,
             card_type: 4,
             card_value: vec![],
+            skill_count: None,
             unique_effect_type: 0,
             unique_effect_summary: None,
             unique_effect_param: vec![],
         };
         assert_eq!(card.short_name(), "[特雷森学园]特别");
+    }
+
+    /// 层1：skillCount 缺省按无数据处理，存在时按数字解析
+    #[test]
+    fn test_skill_count() {
+        let base = r#"{"cardId": 10001, "charaId": 1001, "cardName": "x", "fullName": "x",
+            "rarity": 3, "cardType": 0, "cardValue": []"#;
+        let with: SupportCardData = serde_json::from_str(&format!("{base}, \"skillCount\": 7}}")).unwrap();
+        assert_eq!(with.skill_count, Some(7));
+        let without: SupportCardData = serde_json::from_str(&format!("{base}}}")).unwrap();
+        assert_eq!(without.skill_count, None);
     }
 
     /// 层1：cardDB 的拼音键名（youQing / ganJing / …）按显式 rename 解析
